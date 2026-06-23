@@ -99,10 +99,10 @@ async def run_sync_job(
     # Create job and associate with user
     job = await service.create_job(triggered_by="api")
     job.user_id = user.id
-    await service.repo.save_job(job)
 
-    # Store credentials in job metadata for retry purposes (encrypted)
+    # Store credentials in job metadata for retry purposes (encrypted) — must be before save_job
     store_credentials_in_metadata(job.metadata_info, fiorilli_password, ahgora_password)
+    await service.repo.save_job(job)
 
     # Run the sync task in the background
     background_tasks.add_task(
