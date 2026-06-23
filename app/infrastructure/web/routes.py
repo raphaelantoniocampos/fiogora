@@ -221,13 +221,28 @@ async def dashboard(request: Request, service: SyncService = Depends(get_service
 
 
 @router.get("/config", dependencies=[Depends(require_auth)])
-async def config_page(request: Request):
+async def config_page(request: Request, db: AsyncSession = Depends(get_db)):
+    repo = SqlAlchemyRepo(db)
+    user = await repo.get_user_by_username(request.state.username)
+    fiorilli_user = ""
+    ahgora_user = ""
+    ahgora_company = ""
+    if user:
+        creds = await repo.get_user_credentials(user.id)
+        if creds:
+            fiorilli_user = creds.get("fiorilli_user", "")
+            ahgora_user = creds.get("ahgora_user", "")
+            ahgora_company = creds.get("ahgora_company", "")
+
     return templates.TemplateResponse(
         "config.html",
         {
             "request": request,
             "fiorilli_url": settings.FIORILLI_URL,
+            "fiorilli_user": fiorilli_user,
             "ahgora_url": settings.AHGORA_URL,
+            "ahgora_user": ahgora_user,
+            "ahgora_company": ahgora_company,
             "username": request.state.username,
             "exceptions_typos": settings.EXCEPTIONS_AND_TYPOS,
             "ignore_ids": settings.IGNORE_LOCATION_CHANGE_IDS,
