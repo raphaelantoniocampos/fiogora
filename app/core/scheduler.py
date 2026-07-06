@@ -73,6 +73,14 @@ class RetryScheduler:
                     continue
 
                 fiorilli_password, ahgora_password = creds
+                final_fiorilli_password = fiorilli_password
+                final_ahgora_password = ahgora_password
+
+                fiorilli_url = settings.FIORILLI_URL
+                ahgora_url = settings.AHGORA_URL
+                fiorilli_user = None
+                ahgora_user = None
+                ahgora_company = settings.AHGORA_COMPANY
 
                 # Get user-specific credentials if available, otherwise fall back to global settings
                 if job.user_id:
@@ -81,7 +89,7 @@ class RetryScheduler:
                         # Decrypt passwords from user credentials
                         if user_creds.get("fiorilli_password_encrypted"):
                             try:
-                                decrypt_password(
+                                final_fiorilli_password = decrypt_password(
                                     user_creds["fiorilli_password_encrypted"]
                                 )
                             except Exception as e:
@@ -90,7 +98,7 @@ class RetryScheduler:
                                 )
                         if user_creds.get("ahgora_password_encrypted"):
                             try:
-                                decrypt_password(
+                                final_ahgora_password = decrypt_password(
                                     user_creds["ahgora_password_encrypted"]
                                 )
                             except Exception as e:
@@ -99,13 +107,17 @@ class RetryScheduler:
                                 )
 
                         # Use user urls if available, otherwise fall back to stored ones
-                        (user_creds.get("fiorilli_url") or settings.FIORILLI_URL)
-                        user_creds.get("ahgora_url") or settings.AHGORA_URL
+                        fiorilli_url = (
+                            user_creds.get("fiorilli_url") or settings.FIORILLI_URL
+                        )
+                        ahgora_url = user_creds.get("ahgora_url") or settings.AHGORA_URL
 
                         # Use decrypted passwords if available, otherwise fall back to stored ones
-                        user_creds.get("fiorilli_user")
-                        user_creds.get("ahgora_user")
-                        user_creds.get("ahgora_company")
+                        fiorilli_user = user_creds.get("fiorilli_user")
+                        ahgora_user = user_creds.get("ahgora_user")
+                        ahgora_company = (
+                            user_creds.get("ahgora_company") or settings.AHGORA_COMPANY
+                        )
 
                     else:
                         # No user credentials found, fall back to global settings for URLs only.
@@ -144,6 +156,13 @@ class RetryScheduler:
                             "Global settings not found",
                         )
                         continue
+                    fiorilli_url = global_settings.fiorilli_url or settings.FIORILLI_URL
+                    ahgora_url = global_settings.ahgora_url or settings.AHGORA_URL
+                    ahgora_company = (
+                        global_settings.ahgora_company or settings.AHGORA_COMPANY
+                    )
+
+                from app.services.sync_service import SyncService
 
                 asyncio.create_task(
                     SyncService.run_sync_task_standalone(

@@ -204,6 +204,21 @@ def test_execute_batch_tasks(mock_exec_service_class, client):
 
 
 @patch("app.api.endpoints.TaskExecutionService")
+def test_execute_all_job_tasks(mock_exec_service_class, client):
+    mock_exec_service = mock_exec_service_class.return_value
+    mock_exec_service.execute_all_tasks = AsyncMock(return_value=None)
+    job_id = uuid4()
+
+    app.dependency_overrides[get_execution_service] = lambda: mock_exec_service
+
+    response = client.post(f"/api/sync/jobs/{job_id}/execute-all-tasks")
+    assert response.status_code == 200, response.json()
+    assert "triggered" in response.json()["message"]
+
+    app.dependency_overrides.pop(get_execution_service, None)
+
+
+@patch("app.api.endpoints.TaskExecutionService")
 def test_cancel_task_success(mock_exec_service_class, client):
     mock_exec_service = mock_exec_service_class.return_value
     task_id = uuid4()

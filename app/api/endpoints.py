@@ -23,6 +23,7 @@ from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
 from app.services.credential_crypto import (
     decrypt_credentials_dict,
     store_credentials_in_metadata,
+    extract_credentials_from_metadata,
 )
 from app.services.sync_service import SyncService
 from app.services.task_execution_service import TaskExecutionService
@@ -256,6 +257,118 @@ async def get_registry_diagnostics():
 def get_execution_service(db: AsyncSession = Depends(get_db)):
     repo = SqlAlchemyRepo(db)
     return TaskExecutionService(repo=repo)
+
+
+async def _run_all_tasks_standalone(
+    job_id: UUID,
+    fiorilli_url: Optional[str] = None,
+    fiorilli_user: Optional[str] = None,
+    fiorilli_password: Optional[str] = None,
+    ahgora_url: Optional[str] = None,
+    ahgora_user: Optional[str] = None,
+    ahgora_company: Optional[str] = None,
+    ahgora_password: Optional[str] = None,
+):
+    from app.core.database import async_session_factory
+    from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
+
+    async with async_session_factory() as session:
+        repo = SqlAlchemyRepo(session)
+        service = TaskExecutionService(repo=repo)
+        await service.execute_all_tasks(
+            job_id,
+            fiorilli_url=fiorilli_url,
+            fiorilli_user=fiorilli_user,
+            fiorilli_password=fiorilli_password,
+            ahgora_url=ahgora_url,
+            ahgora_user=ahgora_user,
+            ahgora_company=ahgora_company,
+            ahgora_password=ahgora_password,
+        )
+
+
+@router.post(
+    "/jobs/{job_id}/execute-all-tasks",
+    summary="Execute All Automation Tasks for a Job",
+    description="Manually triggers the execution of all automation tasks associated with a job sequentially in the background.",
+)
+async def execute_all_job_tasks(
+    request: Request,
+    job_id: UUID,
+    background_tasks: BackgroundTasks,
+    exec_service: TaskExecutionService = Depends(get_execution_service),
+):
+    # Allow test-mode (no authenticated user)
+    username = getattr(request.state, "username", None)
+    repo = exec_service.repo
+
+    if not username:
+        # No user present (test mode/anonymous)
+        background_tasks.add_task(_run_all_tasks_standalone, job_id)
+        return {"message": "Execution of all tasks triggered", "job_id": str(job_id)}
+
+    maybe_user = repo.get_user_by_username(username)
+    user = await maybe_user if inspect.isawaitable(maybe_user) else maybe_user
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    # Get the user's credentials from the database
+    credentials_dict = await repo.get_user_credentials(user.id)
+    if credentials_dict is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="User credentials not found"
+        )
+
+    credentials_dict = decrypt_credentials_dict(
+        credentials_dict=credentials_dict, user_id=user.id
+    )
+
+    # Get URLs and usernames, fallback to settings if not set
+    fiorilli_url = credentials_dict.get("fiorilli_url") or settings.FIORILLI_URL
+    fiorilli_user = credentials_dict.get("fiorilli_user")
+    if not fiorilli_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fiorilli username missing for user",
+        )
+    ahgora_url = credentials_dict.get("ahgora_url") or settings.AHGORA_URL
+    ahgora_user = credentials_dict.get("ahgora_user")
+    if not ahgora_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ahgora username missing for user",
+        )
+    ahgora_company = credentials_dict.get("ahgora_company") or settings.AHGORA_COMPANY
+    ahgora_password = credentials_dict.get("ahgora_password")
+    fiorilli_password = credentials_dict.get("fiorilli_password")
+
+    # If passwords are not configured in user, fallback to job metadata (if any)
+    if not fiorilli_password or not ahgora_password:
+        job = await repo.get_job(job_id)
+        if job and job.metadata_info:
+            creds_from_meta = extract_credentials_from_metadata(job.metadata_info)
+            if creds_from_meta:
+                meta_fiorilli_pwd, meta_ahgora_pwd = creds_from_meta
+                if not fiorilli_password:
+                    fiorilli_password = meta_fiorilli_pwd
+                if not ahgora_password:
+                    ahgora_password = meta_ahgora_pwd
+
+    # Execute all tasks in background
+    background_tasks.add_task(
+        _run_all_tasks_standalone,
+        job_id,
+        fiorilli_url,
+        fiorilli_user,
+        fiorilli_password,
+        ahgora_url,
+        ahgora_user,
+        ahgora_company,
+        ahgora_password,
+    )
+    return {"message": "Execution of all tasks triggered", "job_id": str(job_id)}
 
 
 async def _run_batch_standalone(

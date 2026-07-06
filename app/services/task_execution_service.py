@@ -34,6 +34,7 @@ class TaskExecutionService:
         ahgora_user: Optional[str] = None,
         ahgora_company: Optional[str] = None,
         ahgora_password: Optional[str] = None,
+        evaluate_job: bool = True,
     ) -> bool:
         """
         Executes a single automation task.
@@ -114,7 +115,8 @@ class TaskExecutionService:
                 task_id, TaskStatus.FAILED, message=error_msg
             )
 
-        await self.repo.evaluate_and_update_job_status(task.job_id)
+        if evaluate_job:
+            await self.repo.evaluate_and_update_job_status(task.job_id)
         return success
 
     async def execute_batch(
@@ -182,7 +184,67 @@ class TaskExecutionService:
                 ahgora_user=ahgora_user,
                 ahgora_company=ahgora_company,
                 ahgora_password=ahgora_password,
+                evaluate_job=False,
             )
+
+        await self.repo.evaluate_and_update_job_status(job_id)
+
+    async def execute_all_tasks(
+        self,
+        job_id: UUID,
+        fiorilli_url: Optional[str] = None,
+        fiorilli_user: Optional[str] = None,
+        fiorilli_password: Optional[str] = None,
+        ahgora_url: Optional[str] = None,
+        ahgora_user: Optional[str] = None,
+        ahgora_company: Optional[str] = None,
+        ahgora_password: Optional[str] = None,
+    ) -> None:
+        """
+        Executes all pending, failed or cancelled tasks for a given job.
+        Runs them one by one sequentially.
+        """
+        logger.info(f"Starting execution of all tasks for job {job_id}")
+
+        await self.repo.update_job_status(job_id=job_id, status=JobStatus.RUNNING)
+
+        tasks = await self.repo.get_automation_tasks_by_job(job_id)
+
+        for t in tasks:
+            # Re-fetch task to ensure we have the latest status
+            current_task = await self.repo.get_task(t.id)
+            if not current_task:
+                continue
+            if current_task.status in [TaskStatus.SUCCESS, TaskStatus.RUNNING]:
+                logger.info(
+                    f"Skipping task {t.id} because status is {current_task.status}"
+                )
+                continue
+
+            if "ADD_LEAVE" in str(current_task.type).upper():
+                logger.info("Delegating ADD_LEAVE task to LeaveSyncService")
+                from app.services.leave_sync_service import LeaveSyncService
+
+                leave_service = LeaveSyncService(self.repo)
+                await leave_service.execute_leaves_batch(
+                    job_id,
+                    ahgora_user=ahgora_user,
+                    ahgora_password=ahgora_password,
+                    ahgora_company=ahgora_company,
+                    ahgora_url=ahgora_url,
+                )
+            else:
+                await self.execute_task(
+                    current_task.id,
+                    fiorilli_url=fiorilli_url,
+                    fiorilli_user=fiorilli_user,
+                    fiorilli_password=fiorilli_password,
+                    ahgora_url=ahgora_url,
+                    ahgora_user=ahgora_user,
+                    ahgora_company=ahgora_company,
+                    ahgora_password=ahgora_password,
+                    evaluate_job=False,
+                )
 
         await self.repo.evaluate_and_update_job_status(job_id)
 
