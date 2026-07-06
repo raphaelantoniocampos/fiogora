@@ -697,7 +697,7 @@ async def get_user_credentials(request: Request, db: AsyncSession = Depends(get_
     }
 
 
-@router.post("/api/user/credentials", dependencies=[Depends(require_auth)])
+@router.put("/api/user/credentials", dependencies=[Depends(require_auth)])
 async def save_user_credentials(
     request: Request,
     fiorilli_url: str = Form(None),

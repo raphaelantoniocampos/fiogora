@@ -75,6 +75,7 @@ def extract_credentials_from_metadata(
         return None
     return decrypt_credentials(token)
 
+
 def decrypt_credentials_dict(credentials_dict, user_id):
     # Decrypt passwords
     if credentials_dict.get("fiorilli_password_encrypted"):

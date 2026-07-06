@@ -24,10 +24,10 @@ class SyncJobModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     metadata_info: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     retry_count: Mapped[int] = mapped_column(default=0)
-    next_retry_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    next_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     logs: Mapped[list["SyncLogModel"]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
@@ -43,15 +43,13 @@ class SyncLogModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     job_id: Mapped[UUID] = mapped_column(ForeignKey("sync_jobs.id"))
-    task_id: Mapped[UUID] = mapped_column(
-        ForeignKey("automation_tasks.id"), nullable=True
-    )
+    task_id: Mapped[Optional[UUID]] = mapped_column(ForeignKey("automation_tasks.id"), nullable=True)
     level: Mapped[str] = mapped_column(String)
     message: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     job: Mapped["SyncJobModel"] = relationship(back_populates="logs")
-    task: Mapped["AutomationTaskModel"] = relationship(back_populates="logs")
+    task: Mapped[Optional["AutomationTaskModel"]] = relationship(back_populates="logs")
 
 
 class AutomationTaskModel(Base):
@@ -67,9 +65,9 @@ class AutomationTaskModel(Base):
     )
     payload_info: Mapped[dict] = mapped_column("payload", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    finished_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     retry_count: Mapped[int] = mapped_column(default=0)
 
     job: Mapped["SyncJobModel"] = relationship(back_populates="automation_tasks")
@@ -82,11 +80,9 @@ class GlobalSettingsModel(Base):
     __tablename__ = "global_settings"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    fiorilli_url: Mapped[str] = mapped_column(String, default="")
-    fiorilli_user: Mapped[str] = mapped_column(String, default="")
-    ahgora_url: Mapped[str] = mapped_column(String, default="")
-    ahgora_user: Mapped[str] = mapped_column(String, default="")
-    ahgora_company: Mapped[str] = mapped_column(String, default="")
+    fiorilli_url: Mapped[Optional[str]] = mapped_column(String, default="")
+    ahgora_url: Mapped[Optional[str]] = mapped_column(String, default="")
+    ahgora_company: Mapped[Optional[str]] = mapped_column(String, default="")
 
 
 class AhgoraEmployeeModel(Base):
@@ -96,12 +92,12 @@ class AhgoraEmployeeModel(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String)
-    position: Mapped[str] = mapped_column(String, nullable=True)
-    scale: Mapped[str] = mapped_column(String, nullable=True)
-    department: Mapped[str] = mapped_column(String, nullable=True)
-    location: Mapped[str] = mapped_column(String, nullable=True)
-    admission_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    dismissal_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    position: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    scale: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    department: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    location: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    admission_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    dismissal_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
@@ -113,12 +109,12 @@ class AhgoraLeaveModel(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     employee_id: Mapped[str] = mapped_column(String, index=True)
     cod: Mapped[str] = mapped_column(String)
-    cod_name: Mapped[str] = mapped_column(String, nullable=True)
+    cod_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     start_date: Mapped[datetime] = mapped_column(DateTime)
-    end_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    start_time: Mapped[str] = mapped_column(String, nullable=True)
-    end_time: Mapped[str] = mapped_column(String, nullable=True)
-    duration: Mapped[int] = mapped_column(nullable=True)
+    end_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    start_time: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    end_time: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    duration: Mapped[Optional[int]] = mapped_column(nullable=True)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
@@ -132,9 +128,6 @@ class UserModel(Base):
     hashed_password: Mapped[str] = mapped_column(String)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-
-
-# Relationship to credentials — defined after UserCredentialModel
 
 
 class UserCredentialModel(Base):

@@ -95,7 +95,7 @@
                     <p class="mt-2 text-sm text-slate-500">As credenciais são armazenadas localmente no navegador.</p>
                 </div>
 
-                <form hx-post="/api/user/credentials"
+                <form hx-put="/api/user/credentials"
                     hx-swap="none"
                     hx-on::after-request="document.getElementById('save-msg').classList.remove('hidden')"
                     id="configForm"

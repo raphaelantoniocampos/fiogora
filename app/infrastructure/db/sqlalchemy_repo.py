@@ -61,6 +61,7 @@ class SqlAlchemyRepo:
                 id=job.id,
                 status=job.status,
                 triggered_by=job.triggered_by,
+                user_id=job.user_id,
                 created_at=job.created_at,
                 started_at=job.started_at,
                 finished_at=job.finished_at,
@@ -72,6 +73,7 @@ class SqlAlchemyRepo:
             self.session.add(db_job)
         else:
             db_job.status = job.status
+            db_job.user_id = job.user_id
             db_job.started_at = job.started_at  # type: ignore
             db_job.finished_at = job.finished_at  # type: ignore
             db_job.error_message = job.error_message  # type: ignore
@@ -449,7 +451,16 @@ class SqlAlchemyRepo:
     async def get_global_settings(self) -> Optional[GlobalSettingsModel]:
         """Retrieve the global settings from the database"""
         result = await self.session.execute(select(GlobalSettingsModel))
-        return result.scalar_one_or_none()
+        gs = result.scalar_one_or_none()
+        if gs is None:
+            return None
+        # Return only the URL fields and company to callers to avoid leaking credentials
+        return GlobalSettingsModel(
+            id=gs.id,
+            fiorilli_url=gs.fiorilli_url,
+            ahgora_url=gs.ahgora_url,
+            ahgora_company=gs.ahgora_company,
+        )
 
     async def get_user_credentials(self, user_id: UUID) -> Optional[dict]:
         """Retrieve credentials for a specific user"""

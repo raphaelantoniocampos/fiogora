@@ -39,11 +39,6 @@ class Settings:
     USE_CACHED_FILES: bool = os.getenv("USE_CACHED_FILES", "True").lower() == "true"
     UPDATE_LOCATIONS: bool = os.getenv("UPDATE_LOCATIONS", "True").lower() == "true"
 
-    # Credentials
-    FIORILLI_USER: str = os.getenv("FIORILLI_USER", "")
-    AHGORA_USER: str = os.getenv("AHGORA_USER", "")
-    AHGORA_COMPANY: str = os.getenv("AHGORA_COMPANY", "")
-
     # Authentication
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "changeme123")

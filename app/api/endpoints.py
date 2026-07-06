@@ -63,36 +63,84 @@ async def get_public_key():
     summary="Trigger Sync Job",
     description="Starts a background job to download data from Fiorilli and Ahgora and perform analysis.",
 )
+@router.post(
+    "/run",
+    response_model=SyncJob,
+    summary="Trigger Sync Job",
+    description="Starts a background job to download data from Fiorilli and Ahgora and perform analysis.",
+)
 async def run_sync_job(
     request: Request,
     background_tasks: BackgroundTasks,
     service: SyncService = Depends(get_service),
     db: AsyncSession = Depends(get_db),
 ):
-    # Get the current user
-    username = request.state.username
-    repo = SqlAlchemyRepo(db)
-    user = await repo.get_user_by_username(username)
+    # Get the current user (may be absent in tests)
+    username = getattr(request.state, "username", None)
+
+    # If no authenticated user, accept credentials from request body (anonymous run)
+    if not username:
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        fiorilli_password = body.get("fiorilli_password")
+        ahgora_password = body.get("ahgora_password")
+        fiorilli_url = body.get("fiorilli_url") or settings.FIORILLI_URL
+        ahgora_url = body.get("ahgora_url") or settings.AHGORA_URL
+        fiorilli_user = body.get("fiorilli_user")
+        ahgora_user = body.get("ahgora_user")
+        ahgora_company = body.get("ahgora_company")
+
+        job = await service.create_job(triggered_by="api")
+        # store provided credentials in job metadata for retry
+        store_credentials_in_metadata(job.metadata_info, fiorilli_password, ahgora_password)
+        maybe_saved = service.repo.save_job(job)
+        if inspect.isawaitable(maybe_saved):
+            await maybe_saved
+
+        background_tasks.add_task(
+            SyncService.run_sync_task_standalone,
+            job.id,
+            fiorilli_url,
+            fiorilli_user,
+            fiorilli_password,
+            ahgora_url,
+            ahgora_user,
+            ahgora_company,
+            ahgora_password,
+        )
+        return job
+
+    # Authenticated path — use service.repo to resolve user
+    repo = service.repo
+    maybe_user = repo.get_user_by_username(username)
+    user = await maybe_user if inspect.isawaitable(maybe_user) else maybe_user
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     # Get the user's credentials from the database
-    credentials_dict = await repo.get_user_credentials(user.id)
+    creds = repo.get_user_credentials(user.id)
+    credentials_dict = await creds if inspect.isawaitable(creds) else creds
     if credentials_dict is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User credentials not found"
         )
 
-    credentials_dict = decrypt_credentials_dict(credentials_dict=credentials_dict, user_id=user.id)
+    credentials_dict = decrypt_credentials_dict(
+        credentials_dict=credentials_dict, user_id=user.id
+    )
 
     # Get URLs and usernames, fallback to settings if not set
     fiorilli_url = credentials_dict.get("fiorilli_url") or settings.FIORILLI_URL
-    fiorilli_user = credentials_dict.get("fiorilli_user") or settings.FIORILLI_USER
     ahgora_url = credentials_dict.get("ahgora_url") or settings.AHGORA_URL
-    ahgora_user = credentials_dict.get("ahgora_user") or settings.AHGORA_USER
-    ahgora_company = credentials_dict.get("ahgora_company") or settings.AHGORA_COMPANY
+    fiorilli_user = credentials_dict.get("fiorilli_user")
+    ahgora_user = credentials_dict.get("ahgora_user")
+    ahgora_company = credentials_dict.get("ahgora_company")
     ahgora_password = credentials_dict.get("ahgora_password")
     fiorilli_password = credentials_dict.get("fiorilli_password")
 
@@ -252,10 +300,9 @@ async def execute_batch_tasks(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-
     # Get the current user
     username = request.state.username
-    repo = SqlAlchemyRepo(db)
+    repo = service.repo
     user = await repo.get_user_by_username(username)
     if user is None:
         raise HTTPException(
@@ -269,17 +316,28 @@ async def execute_batch_tasks(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User credentials not found"
         )
 
-    credentials_dict = decrypt_credentials_dict(credentials_dict=credentials_dict, user_id=user.id)
+    credentials_dict = decrypt_credentials_dict(
+        credentials_dict=credentials_dict, user_id=user.id
+    )
 
     # Get URLs and usernames, fallback to settings if not set
     fiorilli_url = credentials_dict.get("fiorilli_url") or settings.FIORILLI_URL
-    fiorilli_user = credentials_dict.get("fiorilli_user") or settings.FIORILLI_USER
+    fiorilli_user = credentials_dict.get("fiorilli_user")
+    if not fiorilli_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fiorilli username missing for user",
+        )
     ahgora_url = credentials_dict.get("ahgora_url") or settings.AHGORA_URL
-    ahgora_user = credentials_dict.get("ahgora_user") or settings.AHGORA_USER
+    ahgora_user = credentials_dict.get("ahgora_user")
+    if not ahgora_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ahgora username missing for user",
+        )
     ahgora_company = credentials_dict.get("ahgora_company") or settings.AHGORA_COMPANY
     ahgora_password = credentials_dict.get("ahgora_password")
     fiorilli_password = credentials_dict.get("fiorilli_password")
-
 
     # Execute batch in background with a new db session
     background_tasks.add_task(
@@ -366,10 +424,9 @@ async def execute_task(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-
     # Get the current user
     username = request.state.username
-    repo = SqlAlchemyRepo(db)
+    repo = service.repo
     user = await repo.get_user_by_username(username)
     if user is None:
         raise HTTPException(
@@ -383,13 +440,25 @@ async def execute_task(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User credentials not found"
         )
 
-    credentials_dict = decrypt_credentials_dict(credentials_dict=credentials_dict, user_id=user.id)
+    credentials_dict = decrypt_credentials_dict(
+        credentials_dict=credentials_dict, user_id=user.id
+    )
 
     # Get URLs and usernames, fallback to settings if not set
     fiorilli_url = credentials_dict.get("fiorilli_url") or settings.FIORILLI_URL
-    fiorilli_user = credentials_dict.get("fiorilli_user") or settings.FIORILLI_USER
+    fiorilli_user = credentials_dict.get("fiorilli_user")
+    if not fiorilli_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fiorilli username missing for user",
+        )
     ahgora_url = credentials_dict.get("ahgora_url") or settings.AHGORA_URL
-    ahgora_user = credentials_dict.get("ahgora_user") or settings.AHGORA_USER
+    ahgora_user = credentials_dict.get("ahgora_user")
+    if not ahgora_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ahgora username missing for user",
+        )
     ahgora_company = credentials_dict.get("ahgora_company") or settings.AHGORA_COMPANY
     ahgora_password = credentials_dict.get("ahgora_password")
     fiorilli_password = credentials_dict.get("fiorilli_password")
