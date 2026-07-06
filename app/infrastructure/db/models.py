@@ -43,7 +43,9 @@ class SyncLogModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     job_id: Mapped[UUID] = mapped_column(ForeignKey("sync_jobs.id"))
-    task_id: Mapped[Optional[UUID]] = mapped_column(ForeignKey("automation_tasks.id"), nullable=True)
+    task_id: Mapped[Optional[UUID]] = mapped_column(
+        ForeignKey("automation_tasks.id"), nullable=True
+    )
     level: Mapped[str] = mapped_column(String)
     message: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

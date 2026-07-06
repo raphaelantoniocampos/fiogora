@@ -19,7 +19,6 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-
 def upgrade() -> None:
     # Drop username columns from global_settings; keep urls and company
     with op.batch_alter_table("global_settings") as batch_op:
@@ -31,5 +30,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Recreate the username columns (non-nullable with empty default to be safe)
     with op.batch_alter_table("global_settings") as batch_op:
-        batch_op.add_column(sa.Column("fiorilli_user", sa.String(), nullable=False, server_default=""))
-        batch_op.add_column(sa.Column("ahgora_user", sa.String(), nullable=False, server_default=""))
+        batch_op.add_column(
+            sa.Column("fiorilli_user", sa.String(), nullable=False, server_default="")
+        )
+        batch_op.add_column(
+            sa.Column("ahgora_user", sa.String(), nullable=False, server_default="")
+        )

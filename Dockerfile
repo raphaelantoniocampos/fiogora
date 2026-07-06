@@ -15,12 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Geckodriver
-RUN GECKO_VERSION=$(wget -qO- https://api.github.com/repos/mozilla/geckodriver/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') \
-    && wget https://github.com/mozilla/geckodriver/releases/download/$GECKO_VERSION/geckodriver-$GECKO_VERSION-linux64.tar.gz \
-    && tar -xzf geckodriver-$GECKO_VERSION-linux64.tar.gz -C /usr/local/bin \
-    && rm geckodriver-$GECKO_VERSION-linux64.tar.gz
-
 # Create a non-root user and group
 ARG UID=1000
 ARG GID=1000
