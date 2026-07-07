@@ -115,9 +115,7 @@ class RetryScheduler:
                         # Use decrypted passwords if available, otherwise fall back to stored ones
                         fiorilli_user = user_creds.get("fiorilli_user")
                         ahgora_user = user_creds.get("ahgora_user")
-                        ahgora_company = (
-                            user_creds.get("ahgora_company") or settings.AHGORA_COMPANY
-                        )
+                        ahgora_company = user_creds.get("ahgora_company")
 
                     else:
                         # No user credentials found, fall back to global settings for URLs only.
@@ -158,9 +156,7 @@ class RetryScheduler:
                         continue
                     fiorilli_url = global_settings.fiorilli_url or settings.FIORILLI_URL
                     ahgora_url = global_settings.ahgora_url or settings.AHGORA_URL
-                    ahgora_company = (
-                        global_settings.ahgora_company or settings.AHGORA_COMPANY
-                    )
+                    ahgora_company = global_settings.ahgora_company
 
                 from app.services.sync_service import SyncService
 

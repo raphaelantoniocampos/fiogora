@@ -108,11 +108,9 @@ class FiorilliBrowser(BaseBrowser):
             if error_element:
                 self._log(
                     "ERROR",
-                    "Fiorilli login failed: Acesso Negado. Usuário ou Senha Inválido",
+                    "Usuário ou senha inválidos",
                 )
-                raise ValueError(
-                    "Fiorilli login failed: Acesso Negado. Usuário ou Senha Inválido"
-                )
+                raise ValueError("Usuário ou senha inválidos")
         except ValueError:
             raise
         except Exception:

@@ -99,11 +99,9 @@ class AhgoraBrowser(BaseBrowser):
             if error_element:
                 self._log(
                     "ERROR",
-                    "Ahgora login failed: Usuário ou senha incorretos, tente novamente.",
+                    "Usuário ou senha inválidos",
                 )
-                raise ValueError(
-                    "Ahgora login failed: Usuário ou senha incorretos, tente novamente."
-                )
+                raise ValueError("Usuário ou senha inválidos")
         except ValueError:
             raise
         except Exception:

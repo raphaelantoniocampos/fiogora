@@ -199,18 +199,28 @@ class SyncService:
 
     async def _handle_job_retry(self, job: SyncJob, error_msg: Optional[str] = None):
         """Calculates next retry and updates job if retries are available."""
-        if job.retry_count >= self.MAX_JOB_RETRIES:
-            final_msg = error_msg or "Max retries reached"
+        is_auth_error = False
+        if error_msg:
+            err_msg_lower = error_msg.lower()
+            if "inválidos" in err_msg_lower or "invalidos" in err_msg_lower:
+                is_auth_error = True
+
+        if job.retry_count >= self.MAX_JOB_RETRIES or is_auth_error:
+            final_msg = (
+                "senha incorreta"
+                if is_auth_error
+                else (error_msg or "Max retries reached")
+            )
             async with self._db_lock:
                 await self.repo.update_job_status(job.id, SyncStatus.FAILED, final_msg)
             await self._log(job.id, "ERROR", f"Sync failed permanently: {final_msg}")
             return
 
-        # Exponential backoff: 5m, 30m, 2h
+        # Exponential backoff: 5m, 30m, 1h
         backoffs = [
             timedelta(minutes=5),
             timedelta(minutes=30),
-            timedelta(hours=2),
+            timedelta(hours=1),
         ]
 
         delay = backoffs[job.retry_count]  # current retry_count is 0..2
@@ -428,6 +438,15 @@ class SyncService:
                         "WARNING",
                         f"Attempt {attempt}/{max_retries} for {description} failed: {str(e)}",
                     )
+                    err_msg_lower = str(e).lower()
+                    if (
+                        "senha incorreta" in err_msg_lower
+                        or "acesso negado" in err_msg_lower
+                        or "dados incorretos" in err_msg_lower
+                        or "senha inválida" in err_msg_lower
+                        or "senha inválido" in err_msg_lower
+                    ):
+                        break
                     if attempt < max_retries:
                         await asyncio.sleep(10)  # Short wait before retry (10s backoff)
 
