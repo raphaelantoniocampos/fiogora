@@ -205,12 +205,8 @@ class SyncService:
             if "inválidos" in err_msg_lower or "invalidos" in err_msg_lower:
                 is_auth_error = True
 
-        if job.retry_count >= self.MAX_JOB_RETRIES or is_auth_error:
-            final_msg = (
-                "senha incorreta"
-                if is_auth_error
-                else (error_msg or "Max retries reached")
-            )
+        if (job.retry_count >= self.MAX_JOB_RETRIES) or (is_auth_error and job.retry_count >= 1):
+            final_msg = error_msg or "Max retries reached"
             async with self._db_lock:
                 await self.repo.update_job_status(job.id, SyncStatus.FAILED, final_msg)
             await self._log(job.id, "ERROR", f"Sync failed permanently: {final_msg}")
