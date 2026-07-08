@@ -435,13 +435,7 @@ class SyncService:
                         f"Attempt {attempt}/{max_retries} for {description} failed: {str(e)}",
                     )
                     err_msg_lower = str(e).lower()
-                    if (
-                        "senha incorreta" in err_msg_lower
-                        or "acesso negado" in err_msg_lower
-                        or "dados incorretos" in err_msg_lower
-                        or "senha inválida" in err_msg_lower
-                        or "senha inválido" in err_msg_lower
-                    ):
+                    if "inválidos" in err_msg_lower or "invalidos" in err_msg_lower:
                         break
                     if attempt < max_retries:
                         await asyncio.sleep(10)  # Short wait before retry (10s backoff)
