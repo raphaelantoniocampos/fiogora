@@ -105,12 +105,13 @@ class FiorilliBrowser(BaseBrowser):
                 By.XPATH,
                 "//label[contains(text(), 'Acesso Negado')]",
             )
+            error_msg = "Usuário ou senha Fiorilli inválido"
             if error_element:
                 self._log(
                     "ERROR",
-                    "Usuário ou senha inválidos",
+                    error_msg,
                 )
-                raise ValueError("Usuário ou senha inválidos")
+                raise ValueError(error_msg)
         except ValueError:
             raise
         except Exception:

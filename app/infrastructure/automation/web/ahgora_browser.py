@@ -96,12 +96,13 @@ class AhgoraBrowser(BaseBrowser):
                 By.XPATH,
                 "//p[contains(text(), 'Dados incorretos, tente novamente.')]",
             )
+            error_msg = "Usuário ou senha Ahgora inválido"
             if error_element:
                 self._log(
                     "ERROR",
-                    "Usuário ou senha inválidos",
+                    error_msg,
                 )
-                raise ValueError("Usuário ou senha inválidos")
+                raise ValueError(error_msg)
         except ValueError:
             raise
         except Exception:
