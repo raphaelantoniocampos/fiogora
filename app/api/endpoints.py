@@ -78,44 +78,6 @@ async def run_sync_job(
     # Get the current user (may be absent in tests)
     username = getattr(request.state, "username", None)
 
-    # If no authenticated user, accept credentials from request body (anonymous run)
-    if not username:
-        body = {}
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-
-        fiorilli_password = body.get("fiorilli_password")
-        ahgora_password = body.get("ahgora_password")
-        fiorilli_url = body.get("fiorilli_url") or settings.FIORILLI_URL
-        ahgora_url = body.get("ahgora_url") or settings.AHGORA_URL
-        fiorilli_user = body.get("fiorilli_user")
-        ahgora_user = body.get("ahgora_user")
-        ahgora_company = body.get("ahgora_company")
-
-        job = await service.create_job(triggered_by="api")
-        # store provided credentials in job metadata for retry
-        store_credentials_in_metadata(
-            job.metadata_info, fiorilli_password, ahgora_password
-        )
-        maybe_saved = service.repo.save_job(job)
-        if inspect.isawaitable(maybe_saved):
-            await maybe_saved
-
-        background_tasks.add_task(
-            SyncService.run_sync_task_standalone,
-            job.id,
-            fiorilli_url,
-            fiorilli_user,
-            fiorilli_password,
-            ahgora_url,
-            ahgora_user,
-            ahgora_company,
-            ahgora_password,
-        )
-        return job
-
     # Authenticated path — use service.repo to resolve user
     repo = service.repo
     maybe_user = repo.get_user_by_username(username)

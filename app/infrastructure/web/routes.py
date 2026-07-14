@@ -752,3 +752,188 @@ async def save_user_credentials(
 
     # Keep legacy API response for tests: return {"status": "ok"}
     return {"status": "ok"}
+
+
+@router.post(
+    "/api/user/credentials/test/fiorilli", dependencies=[Depends(require_auth)]
+)
+async def test_fiorilli_credentials(
+    request: Request,
+    fiorilli_url: str = Form(None),
+    fiorilli_user: str = Form(None),
+    fiorilli_password: str = Form(None),
+    db: AsyncSession = Depends(get_db),
+):
+    import logging
+
+    logger = logging.getLogger(__name__)
+    username = request.state.username
+    repo = SqlAlchemyRepo(db)
+    user = await repo.get_user_by_username(username)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    existing = await repo.get_user_credentials(user.id) or {}
+
+    url = (
+        fiorilli_url.strip()
+        if fiorilli_url and fiorilli_url.strip()
+        else existing.get("fiorilli_url")
+    )
+    user_val = (
+        fiorilli_user.strip()
+        if fiorilli_user and fiorilli_user.strip()
+        else existing.get("fiorilli_user")
+    )
+
+    password = fiorilli_password
+    if not password and existing.get("fiorilli_password_encrypted"):
+        try:
+            password = decrypt_password(existing["fiorilli_password_encrypted"])
+        except Exception:
+            pass
+
+    if not url or not user_val or not password:
+        return {
+            "status": "error",
+            "message": "Campos URL, Usuário e Senha são obrigatórios para salvar.",
+        }
+
+    browser = None
+    try:
+        from app.infrastructure.automation.web.fiorilli_browser import FiorilliBrowser
+
+        browser = FiorilliBrowser(
+            fiorilli_url=url,
+            fiorilli_user=user_val,
+            fiorilli_password=password,
+            headless=True,
+        )
+        browser._login()
+
+        # Test succeeded, save to database
+        fiorilli_password_encrypted = existing.get("fiorilli_password_encrypted")
+        if fiorilli_password:
+            fiorilli_password_encrypted = encrypt_password(fiorilli_password)
+
+        credentials_dict = {
+            "fiorilli_url": url,
+            "fiorilli_user": user_val,
+            "fiorilli_password_encrypted": fiorilli_password_encrypted,
+            "ahgora_url": existing.get("ahgora_url"),
+            "ahgora_user": existing.get("ahgora_user"),
+            "ahgora_password_encrypted": existing.get("ahgora_password_encrypted"),
+            "ahgora_company": existing.get("ahgora_company"),
+        }
+        await repo.save_user_credentials(user.id, credentials_dict)
+
+        return {
+            "status": "ok",
+            "message": "Credenciais salvas com sucesso!",
+        }
+    except Exception as e:
+        logger.exception(f"Fiorilli test/save login failed: {str(e)}")
+        return {
+            "status": "error",
+            "message": "Erro de login no Fiorilli: Verifique o usuário e senha ou tente novamente mais tarde",
+        }
+    finally:
+        if browser:
+            browser.close_driver()
+
+
+@router.post("/api/user/credentials/test/ahgora", dependencies=[Depends(require_auth)])
+async def test_ahgora_credentials(
+    request: Request,
+    ahgora_url: str = Form(None),
+    ahgora_user: str = Form(None),
+    ahgora_password: str = Form(None),
+    ahgora_company: str = Form(None),
+    db: AsyncSession = Depends(get_db),
+):
+    import logging
+
+    logger = logging.getLogger(__name__)
+    username = request.state.username
+    repo = SqlAlchemyRepo(db)
+    user = await repo.get_user_by_username(username)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    existing = await repo.get_user_credentials(user.id) or {}
+
+    url = (
+        ahgora_url.strip()
+        if ahgora_url and ahgora_url.strip()
+        else existing.get("ahgora_url")
+    )
+    user_val = (
+        ahgora_user.strip()
+        if ahgora_user and ahgora_user.strip()
+        else existing.get("ahgora_user")
+    )
+    company = (
+        ahgora_company.strip()
+        if ahgora_company and ahgora_company.strip()
+        else existing.get("ahgora_company")
+    )
+
+    password = ahgora_password
+    if not password and existing.get("ahgora_password_encrypted"):
+        try:
+            password = decrypt_password(existing["ahgora_password_encrypted"])
+        except Exception:
+            pass
+
+    if not url or not user_val or not password or not company:
+        return {
+            "status": "error",
+            "message": "Campos URL, Empresa, Usuário e Senha são obrigatórios para salvar.",
+        }
+
+    browser = None
+    try:
+        from app.infrastructure.automation.web.ahgora_browser import AhgoraBrowser
+
+        # AhgoraBrowser automatically runs self._login() in __init__
+        browser = AhgoraBrowser(
+            ahgora_url=url,
+            ahgora_user=user_val,
+            ahgora_password=password,
+            ahgora_company=company,
+            headless=True,
+        )
+
+        # Test succeeded, save to database
+        ahgora_password_encrypted = existing.get("ahgora_password_encrypted")
+        if ahgora_password:
+            ahgora_password_encrypted = encrypt_password(ahgora_password)
+
+        credentials_dict = {
+            "fiorilli_url": existing.get("fiorilli_url"),
+            "fiorilli_user": existing.get("fiorilli_user"),
+            "fiorilli_password_encrypted": existing.get("fiorilli_password_encrypted"),
+            "ahgora_url": url,
+            "ahgora_user": user_val,
+            "ahgora_password_encrypted": ahgora_password_encrypted,
+            "ahgora_company": company,
+        }
+        await repo.save_user_credentials(user.id, credentials_dict)
+
+        return {
+            "status": "ok",
+            "message": "Credenciais salvas com sucesso!",
+        }
+    except Exception as e:
+        logger.exception(f"Ahgora test/save login failed: {str(e)}")
+        return {
+            "status": "error",
+            "message": "Erro de login no Ahgora: Verifique o usuário e senha ou tente novamente mais tarde",
+        }
+    finally:
+        if browser:
+            browser.close_driver()

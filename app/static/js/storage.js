@@ -75,8 +75,15 @@ async function startSync(event) {
 
         setTimeout(() => typeof htmx !== 'undefined' && htmx.trigger('#jobs-list', 'refresh'), 500);
     } catch (error) {
-        alert(error.message || "Ocorreu um erro ao iniciar a sincronização.");
-        console.error(error);
+        if (error.message == "User credentials not found") {
+            console.log(error);
+            alert("Configure as credenciais dos sistemas")
+            window.location.href = "/config#automation"
+        }
+        else {
+            alert(error.message || "Ocorreu um erro ao iniciar a sincronização.");
+            console.error(error);
+        }
     } finally {
         btn.disabled = false;
         if (btnText) btnText.innerText = "Iniciar Sincronização";

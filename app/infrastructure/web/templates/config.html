@@ -117,6 +117,16 @@
                                 <label for="fiorilli-password" class="block text-sm font-medium text-slate-700">Senha</label>
                                 <input type="text" name="fiorilli_password" id="fiorilli-password" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                             </div>
+                            <div class="flex items-center space-x-3 pt-2">
+                                <button type="button" id="test-fiorilli-btn" onclick="testCredentials('fiorilli')" class="inline-flex items-center px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all">
+                                    <svg id="fiorilli-btn-spinner" class="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-500 hidden" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Salvar</span>
+                                </button>
+                                <span id="fiorilli-test-result" class="text-sm font-medium transition-all"></span>
+                            </div>
                         </div>
 
                         <!-- Ahgora Config -->
@@ -138,14 +148,17 @@
                                 <label for="ahgora-password" class="block text-sm font-medium text-slate-700">Senha</label>
                                 <input type="text" name="ahgora_password" id="ahgora-password" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                             </div>
+                            <div class="flex items-center space-x-3 pt-2">
+                                <button type="button" id="test-ahgora-btn" onclick="testCredentials('ahgora')" class="inline-flex items-center px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all">
+                                    <svg id="ahgora-btn-spinner" class="animate-spin -ml-1 mr-2 h-4 w-4 text-indigo-500 hidden" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Salvar</span>
+                                </button>
+                                <span id="ahgora-test-result" class="text-sm font-medium transition-all"></span>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="flex flex-col items-end pt-4 border-t border-slate-100">
-                        <button type="submit" class="btn-primary flex items-center py-2 px-6 rounded-lg text-sm font-semibold shadow-sm">
-                            Salvar Credenciais
-                        </button>
-                        <div id="save-msg" class="text-sm pt-4 text-emerald-600 hidden font-medium animate-pulse">Credenciais salvas com sucesso!</div>
                     </div>
                 </form>
             </div>

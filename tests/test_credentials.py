@@ -165,3 +165,90 @@ def test_save_user_credentials_preserves_existing_password(
     assert saved_dict["fiorilli_user"] == "fuser_updated"
     assert saved_dict["fiorilli_password_encrypted"] == fiorilli_pw_enc
     assert saved_dict["ahgora_password_encrypted"] == ahgora_pw_enc
+
+
+@patch("app.infrastructure.web.routes.decode_access_token")
+@patch("app.infrastructure.web.routes.SqlAlchemyRepo")
+@patch("app.infrastructure.automation.web.fiorilli_browser.FiorilliBrowser")
+def test_test_fiorilli_credentials_success(
+    mock_browser, mock_repo_class, mock_decode, client
+):
+    mock_decode.return_value = {"sub": "testuser", "is_admin": False}
+    mock_repo = mock_repo_class.return_value
+
+    mock_user = MagicMock()
+    mock_user.id = uuid4()
+    mock_repo.get_user_by_username = AsyncMock(return_value=mock_user)
+    mock_repo.get_user_credentials = AsyncMock(return_value=None)
+
+    # Mock browser instance and _login method
+    mock_browser_inst = mock_browser.return_value
+    mock_browser_inst._login = MagicMock()
+    mock_browser_inst.close_driver = MagicMock()
+
+    client.cookies.set("access_token", "dummy_token")
+    response = client.post(
+        "/api/user/credentials/test/fiorilli",
+        data={
+            "fiorilli_url": "http://fiorilli",
+            "fiorilli_user": "fuser",
+            "fiorilli_password": "fiorilli_pwd",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "message": "Credenciais salvas com sucesso!",
+    }
+    mock_browser.assert_called_once_with(
+        fiorilli_url="http://fiorilli",
+        fiorilli_user="fuser",
+        fiorilli_password="fiorilli_pwd",
+        headless=True,
+    )
+    mock_browser_inst._login.assert_called_once()
+    mock_browser_inst.close_driver.assert_called_once()
+
+
+@patch("app.infrastructure.web.routes.decode_access_token")
+@patch("app.infrastructure.web.routes.SqlAlchemyRepo")
+@patch("app.infrastructure.automation.web.ahgora_browser.AhgoraBrowser")
+def test_test_ahgora_credentials_success(
+    mock_browser, mock_repo_class, mock_decode, client
+):
+    mock_decode.return_value = {"sub": "testuser", "is_admin": False}
+    mock_repo = mock_repo_class.return_value
+
+    mock_user = MagicMock()
+    mock_user.id = uuid4()
+    mock_repo.get_user_by_username = AsyncMock(return_value=mock_user)
+    mock_repo.get_user_credentials = AsyncMock(return_value=None)
+
+    mock_browser_inst = mock_browser.return_value
+    mock_browser_inst.close_driver = MagicMock()
+
+    client.cookies.set("access_token", "dummy_token")
+    response = client.post(
+        "/api/user/credentials/test/ahgora",
+        data={
+            "ahgora_url": "http://ahgora",
+            "ahgora_user": "auser",
+            "ahgora_password": "ahgora_pwd",
+            "ahgora_company": "acompany",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "message": "Credenciais salvas com sucesso!",
+    }
+    mock_browser.assert_called_once_with(
+        ahgora_url="http://ahgora",
+        ahgora_user="auser",
+        ahgora_password="ahgora_pwd",
+        ahgora_company="acompany",
+        headless=True,
+    )
+    mock_browser_inst.close_driver.assert_called_once()
