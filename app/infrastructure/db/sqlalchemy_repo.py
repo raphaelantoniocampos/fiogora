@@ -354,14 +354,17 @@ class SqlAlchemyRepo:
             elif t.status == AutomationTaskStatus.SUCCESS:
                 completed += 1
 
+        total = len(tasks)
         if is_running:
             new_status = SyncStatus.RUNNING
         elif is_pending:
             new_status = SyncStatus.PENDING
+        elif completed == total:
+            new_status = SyncStatus.SUCCESS
+        elif is_cancelled == total:
+            new_status = SyncStatus.CANCELLED
         elif is_failed:
             new_status = SyncStatus.FAILED
-        elif is_cancelled > completed:
-            new_status = SyncStatus.CANCELLED
         else:
             new_status = SyncStatus.SUCCESS
 

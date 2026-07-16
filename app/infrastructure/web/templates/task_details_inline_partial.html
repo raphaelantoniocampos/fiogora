@@ -112,8 +112,8 @@
                             {% endif %}
 
                             <!-- Cancel Action -->
-                            {% if (task.status|string == 'RUNNING' and task.status|string ==
-                            'AutomationTaskStatus.RUNNING') or (not task.status.name or task.status.name == 'RUNNING')
+                            {% if (task.status|string in ['RUNNING', 'FAILED'] and task.status|string in
+                            ['AutomationTaskStatus.RUNNING','AutomationTaskStatus.FAILED']) or (not task.status.name or task.status.name in ['RUNNING', 'FAILED'])
                             %}
                             <button
                                 onclick="fetch('/api/sync/tasks/{{ task.id }}/cancel', {method: 'POST'}).then(() => { this.classList.add('opacity-50', 'cursor-not-allowed'); this.disabled = true; window.location.reload(); })"

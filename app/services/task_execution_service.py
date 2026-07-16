@@ -57,6 +57,9 @@ class TaskExecutionService:
             task_id=task_id,
         )
 
+        if evaluate_job:
+            await self.repo.evaluate_and_update_job_status(task.job_id)
+
         success = False
         error_msg = None
 
@@ -141,6 +144,8 @@ class TaskExecutionService:
 
         await self.repo.update_job_status(job_id=job_id, status=JobStatus.RUNNING)
 
+        await self.repo.evaluate_and_update_job_status(job_id)
+
         if "ADD_LEAVE" in str(task_type).upper():
             logger.info("Delegating ADD_LEAVE batch to LeaveSyncService")
             from app.services.leave_sync_service import LeaveSyncService
@@ -153,7 +158,6 @@ class TaskExecutionService:
                 ahgora_company=ahgora_company,
                 ahgora_url=ahgora_url,
             )
-            await self.repo.evaluate_and_update_job_status(job_id)
             return
 
         # We need a custom repo method or we fetch all and filter
