@@ -219,7 +219,11 @@ class TaskExecutionService:
             current_task = await self.repo.get_task(t.id)
             if not current_task:
                 continue
-            if current_task.status in [TaskStatus.SUCCESS, TaskStatus.RUNNING]:
+            if current_task.status in [
+                TaskStatus.SUCCESS,
+                TaskStatus.RUNNING,
+                TaskStatus.CANCELLED,
+            ]:
                 logger.info(
                     f"Skipping task {t.id} because status is {current_task.status}"
                 )

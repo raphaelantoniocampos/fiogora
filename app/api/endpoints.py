@@ -302,7 +302,7 @@ async def execute_all_job_tasks(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ahgora username missing for user",
         )
-    ahgora_company = credentials_dict.get("ahgora_company") or settings.AHGORA_COMPANY
+    ahgora_company = credentials_dict.get("ahgora_company")
     ahgora_password = credentials_dict.get("ahgora_password")
     fiorilli_password = credentials_dict.get("fiorilli_password")
 
