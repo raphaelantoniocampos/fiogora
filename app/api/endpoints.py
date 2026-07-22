@@ -117,7 +117,7 @@ async def run_sync_job(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Fiorilli or Ahgora credentials not fully set. Please configure them in config#automation first.",
+            detail="Credenciais não configuradas. Por favor Configure as credenciais dos sistemas em Configurações#Automação",
         )
 
     # Create job and associate with user

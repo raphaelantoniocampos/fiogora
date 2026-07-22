@@ -20,11 +20,13 @@ def _get_fernet() -> Fernet:
     return Fernet(key)
 
 
-def encrypt_credentials(fiorilli_password: Optional[str], ahgora_password: Optional[str]) -> str:
+def encrypt_credentials(
+    fiorilli_password: Optional[str], ahgora_password: Optional[str]
+) -> str:
     """Encrypt two passwords into a single Fernet token string."""
     fp = fiorilli_password or ""
     ap = ahgora_password or ""
-    
+
     # Safely stringify any mock/MagicMock objects passed in tests
     if not isinstance(fp, str):
         fp = str(fp)
