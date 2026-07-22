@@ -65,6 +65,34 @@ def test_run_sync_job(mock_service_class, mock_decrypt, client):
     app.dependency_overrides.pop(get_service, None)
 
 
+@patch("app.api.endpoints.transport_crypto.decrypt")
+@patch("app.api.endpoints.SyncService")
+def test_run_sync_job_missing_credentials_fails(mock_service_class, mock_decrypt, client):
+    mock_decrypt.side_effect = lambda x: x
+    mock_service = mock_service_class.return_value
+    mock_service.repo.get_user_by_username = AsyncMock(return_value=MagicMock(id=uuid4()))
+    # Set credentials dictionary with incomplete fields
+    mock_service.repo.get_user_credentials = AsyncMock(return_value={
+        "fiorilli_url": "http://fiorilli",
+        "fiorilli_user": None, # Missing!
+        "fiorilli_password": "fiorilli_pwd",
+        "ahgora_url": "http://ahgora",
+        "ahgora_user": "auser",
+        "ahgora_password": "ahgora_pwd",
+        "ahgora_company": "acompany",
+    })
+    
+    app.dependency_overrides[get_service] = lambda: mock_service
+
+    response = client.post(
+        "/api/sync/run", json={"fiorilli_password": "enc", "ahgora_password": "enc"}
+    )
+    assert response.status_code == 400
+    assert "Fiorilli or Ahgora credentials not fully set" in response.json()["detail"]
+
+    app.dependency_overrides.pop(get_service, None)
+
+
 @patch("app.api.endpoints.SyncService")
 def test_list_jobs(mock_service_class, client):
     mock_service = mock_service_class.return_value

@@ -108,6 +108,18 @@ async def run_sync_job(
     ahgora_password = credentials_dict.get("ahgora_password")
     fiorilli_password = credentials_dict.get("fiorilli_password")
 
+    if (
+        not fiorilli_user
+        or not fiorilli_password
+        or not ahgora_user
+        or not ahgora_password
+        or not ahgora_company
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fiorilli or Ahgora credentials not fully set. Please configure them in config#automation first.",
+        )
+
     # Create job and associate with user
     job = await service.create_job(triggered_by="api")
     job.user_id = user.id
