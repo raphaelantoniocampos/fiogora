@@ -38,6 +38,17 @@ def test_run_sync_job(mock_service_class, mock_decrypt, client):
     mock_service.create_job = AsyncMock(
         return_value=SyncJob(id=job_id, triggered_by="api")
     )
+    mock_service.repo.get_user_by_username = AsyncMock(return_value=MagicMock(id=uuid4()))
+    mock_service.repo.get_user_credentials = AsyncMock(return_value={
+        "fiorilli_url": "http://fiorilli",
+        "fiorilli_user": "fuser",
+        "fiorilli_password": "fiorilli_pwd",
+        "ahgora_url": "http://ahgora",
+        "ahgora_user": "auser",
+        "ahgora_password": "ahgora_pwd",
+        "ahgora_company": "acompany",
+    })
+    mock_service.repo.save_job = AsyncMock()
     # mock background task isn't strictly necessary for the service mock,
     # but the endpoint triggers BackgroundTasks.add_task
 

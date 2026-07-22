@@ -180,6 +180,7 @@ def test_test_fiorilli_credentials_success(
     mock_user.id = uuid4()
     mock_repo.get_user_by_username = AsyncMock(return_value=mock_user)
     mock_repo.get_user_credentials = AsyncMock(return_value=None)
+    mock_repo.save_user_credentials = AsyncMock()
 
     # Mock browser instance and _login method
     mock_browser_inst = mock_browser.return_value
@@ -224,6 +225,7 @@ def test_test_ahgora_credentials_success(
     mock_user.id = uuid4()
     mock_repo.get_user_by_username = AsyncMock(return_value=mock_user)
     mock_repo.get_user_credentials = AsyncMock(return_value=None)
+    mock_repo.save_user_credentials = AsyncMock()
 
     mock_browser_inst = mock_browser.return_value
     mock_browser_inst.close_driver = MagicMock()
