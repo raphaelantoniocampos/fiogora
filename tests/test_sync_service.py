@@ -129,6 +129,49 @@ async def test_run_sync_background_retry_scheduled():
     assert SyncStatus.RUNNING in status_calls
 
 
+@pytest.mark.asyncio
+async def test_run_sync_background_credentials_not_set_fails_permanently():
+    repo = MagicMock()
+    job_id = uuid4()
+    # Fresh job, retry_count=0
+    job = SyncJob(id=job_id, retry_count=0)
+    repo.get_job = AsyncMock(return_value=job)
+    repo.update_job_status = AsyncMock()
+    repo.increment_job_retry = AsyncMock()
+    repo.add_log = AsyncMock()
+
+    service = SyncService(repo=repo)
+
+    with patch.object(
+        service,
+        "_execute_sync_logic",
+        new_callable=AsyncMock,
+        return_value=SyncResult(
+            success=False,
+            status=SyncStatus.FAILED,
+            message="Ahgora credentials not set (AHGORA_USER, password from frontend, AHGORA_COMPANY)",
+        ),
+    ):
+        await service.run_sync_background(
+            job_id,
+            "http://fiorilli",
+            "user1",
+            "pass1",
+            "http://ahgora",
+            "user2",
+            "company",
+            "pass2",
+        )
+
+    # Should have called update_job_status with FAILED, not increment_job_retry
+    repo.increment_job_retry.assert_not_called()
+    repo.update_job_status.assert_any_call(
+        job_id,
+        SyncStatus.FAILED,
+        "Ahgora credentials not set (AHGORA_USER, password from frontend, AHGORA_COMPANY)",
+    )
+
+
 @patch("app.services.sync_service.Path.exists", return_value=True)
 @pytest.mark.asyncio
 async def test_validate_ahgora_state(mock_exists):

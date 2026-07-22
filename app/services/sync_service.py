@@ -202,7 +202,13 @@ class SyncService:
         is_auth_error = False
         if error_msg:
             err_msg_lower = error_msg.lower()
-            if "inválidos" in err_msg_lower or "invalidos" in err_msg_lower:
+            if (
+                "inválidos" in err_msg_lower
+                or "invalidos" in err_msg_lower
+                or "credentials not set" in err_msg_lower
+                or "credentials missing" in err_msg_lower
+                or "credenciais não" in err_msg_lower
+            ):
                 is_auth_error = True
 
         if job.retry_count >= self.MAX_JOB_RETRIES or is_auth_error:
