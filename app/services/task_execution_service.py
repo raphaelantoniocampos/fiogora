@@ -430,10 +430,13 @@ class TaskExecutionService:
             ]:
                 emp_data = {
                     "id": str(payload.get("id")),
-                    "name": payload.get("name"),
-                    "position": payload.get("position"),
-                    "department": payload.get("department"),
-                    "admission_date": payload.get("admission_date"),
+                    "name": payload.get("name") or payload.get("name_expected"),
+                    "position": payload.get("position")
+                    or payload.get("position_expected"),
+                    "department": payload.get("department")
+                    or payload.get("department_expected"),
+                    "admission_date": payload.get("admission_date")
+                    or payload.get("admission_date_expected"),
                 }
                 if task_type == TaskType.REMOVE_EMPLOYEE:
                     emp_data["dismissal_date"] = payload.get("dismissal_date")

@@ -260,12 +260,15 @@ class AhgoraBrowser(BaseBrowser):
                 "department_actual_norm"
             ):
                 if payload.get("department_expected"):
+                    department_value = settings.EXCEPTIONS_AND_TYPOS.get(
+                        payload["department_expected"], payload["department_expected"]
+                    )
                     self._set_autocomplete_select(
-                        "dados-departamento", payload["department_expected"]
+                        "dados-departamento", department_value
                     )
                     has_changes = True
                     change_logs.append(
-                        f"Updated department: {payload.get('department_actual')} -> {payload.get('department_expected')}"
+                        f"Updated department: {payload.get('department_actual')} -> {department_value}"
                     )
 
             if payload.get("department_expected") and settings.UPDATE_LOCATIONS:
