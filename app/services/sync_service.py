@@ -851,6 +851,12 @@ class SyncService:
             .decode("ASCII")
         )
         normalized = settings.EXCEPTIONS_AND_TYPOS.get(normalized, normalized)
+        # Strip accents again, just in case the typo correction contains accents
+        normalized = (
+            unicodedata.normalize("NFKD", normalized)
+            .encode("ASCII", "ignore")
+            .decode("ASCII")
+        )
         return normalized.lower().strip()
 
     async def _generate_tasks_dfs(
