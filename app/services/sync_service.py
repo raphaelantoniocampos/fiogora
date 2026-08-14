@@ -609,7 +609,41 @@ class SyncService:
                 all_leaves=all_leaves,
             )
 
-            # 4. Create and persist AutomationTasks
+            # 4. DB-patch dismissed employees already removed from Ahgora
+            # If an employee is dismissed in Fiorilli, absent from the Ahgora CSV
+            # (already gone from Ahgora), but still in DB without dismissal_date,
+            # the REMOVE_EMPLOYEE browser task would fail. Fix the DB state directly.
+            if not ahgora_csv_employees.empty and not dismissed_employees_df.empty:
+                csv_ids = set(ahgora_csv_employees["id"].astype(str))
+                already_removed = dismissed_employees_df[
+                    ~dismissed_employees_df["id"].isin(csv_ids)
+                ]
+                if not already_removed.empty:
+                    patch_records = already_removed.drop(
+                        columns=["dismissal_date"], errors="ignore"
+                    )
+                    fiorilli_dismissed = fiorilli_employees[
+                        fiorilli_employees["dismissal_date"].notna()
+                    ]
+                    patch_records = patch_records.merge(
+                        fiorilli_dismissed[["id", "dismissal_date"]],
+                        on="id",
+                        how="left",
+                    )
+                    await self.repo.save_ahgora_employees_batch(
+                        patch_records.to_dict(orient="records")
+                    )
+                    await self._log(
+                        job_id,
+                        "INFO",
+                        f"DB-patched {len(patch_records)} dismissed employee(s) no longer in Ahgora.",
+                    )
+                    # Remove from dismissed_employees_df — no browser task needed
+                    dismissed_employees_df = dismissed_employees_df[
+                        dismissed_employees_df["id"].isin(csv_ids)
+                    ]
+
+            # 5. Create and persist AutomationTasks
             await self._log(
                 job_id, "INFO", "Persisting automation tasks to database..."
             )
@@ -907,17 +941,24 @@ class SyncService:
             ~fiorilli_employees["id"].isin(dismissed_ids)
         ]
 
-        # New employees: not in DB
+        # New employees: active in Fiorilli but not in Ahgora CSV (ground truth).
+        # CSV is freshly downloaded from Ahgora — if an employee is not there,
+        # they are not in Ahgora, regardless of stale DB cache state.
+        # Employees present in DB but absent from CSV must also be re-added,
+        # as the DB state is stale (e.g. a previous ADD_EMPLOYEE failed post-DB-update).
         ahgora_db_ids = set(ahgora_employees["id"])
-        missing_from_db = fiorilli_active_employees[
-            ~fiorilli_active_employees["id"].isin(ahgora_db_ids)
+        if not ahgora_csv_employees.empty:
+            new_employees_df = fiorilli_active_employees[
+                ~fiorilli_active_employees["id"].isin(ahgora_csv_ids)
+            ]
+        else:
+            # No CSV available — fall back to DB as source of truth
+            new_employees_df = fiorilli_active_employees[
+                ~fiorilli_active_employees["id"].isin(ahgora_db_ids)
+            ]
+        new_employees_df = new_employees_df[
+            new_employees_df["binding"] != "AUXILIO RECLUSAO"
         ]
-        missing_from_db = missing_from_db[
-            missing_from_db["binding"] != "AUXILIO RECLUSAO"
-        ]
-
-        # Truly new — not in DB AND not in Ahgora CSV → need Selenium automation
-        new_employees_df = missing_from_db[~missing_from_db["id"].isin(ahgora_csv_ids)]
 
         # DB-only seed — in Ahgora CSV but not in DB → seed Ahgora CSV data to DB
         seed_ids = ahgora_csv_ids - ahgora_db_ids
