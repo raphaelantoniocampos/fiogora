@@ -230,11 +230,8 @@ class AhgoraBrowser(BaseBrowser):
                 "position_actual_norm"
             ):
                 if payload.get("position_expected"):
-                    self.send_keys(
-                        "dados.cargo",
-                        payload["position_expected"],
-                        By.ID,
-                        clear_first=True,
+                    self._set_autocomplete_select(
+                        "dados.cargo", payload["position_expected"]
                     )
                     has_changes = True
                     change_logs.append(

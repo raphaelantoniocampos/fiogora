@@ -215,10 +215,25 @@ class BaseBrowser(ABC):
             self.driver, delay, ignored_exceptions=ignored_exceptions
         ).until(EC.presence_of_element_located((selector_type, selector)))
         if clear_first:
-            element.clear()
-        for char in keys:
-            element.send_keys(char)
-            time.sleep(typing_delay)
+            self.driver.execute_script(
+                "arguments[0].value = '';", element
+            )
+
+        if typing_delay:
+            for char in keys:
+                element.send_keys(char)
+                time.sleep(typing_delay)
+        else:
+            # Use JS to set value directly — send_keys drops spaces in some inputs
+            self.driver.execute_script(
+                """
+                var el = arguments[0];
+                el.value = arguments[1];
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                """,
+                element,
+                keys,
+            )
 
     def right_click_element(
         self,
