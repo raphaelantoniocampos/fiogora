@@ -27,7 +27,7 @@ def sync_service(mock_repo):
 
 def test_normalize_text(sync_service):
     assert sync_service._normalize_text("  Teste  Acentuação  ") == "teste acentuacao"
-    assert sync_service._normalize_text("VIGILACIA EM SAUDE") == "vigilancia em saude"
+    assert sync_service._normalize_text("VIGILANCIA EM SAUDE") == "vigilancia em saude"
     assert pd.isna(sync_service._normalize_text(np.nan))
 
 
