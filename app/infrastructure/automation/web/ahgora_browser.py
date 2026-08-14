@@ -66,10 +66,10 @@ class AhgoraBrowser(BaseBrowser):
         self.wait(self.DELAY)
 
     def _enter_username(self, selector: str, user: str) -> None:
-        self.send_keys(selector, user, selector_type=By.NAME)
+        self.send_keys(selector, user, selector_type=By.NAME, typing_delay=0.01)
 
     def _enter_password(self, selector: str, password: str) -> None:
-        self.send_keys(selector, password, selector_type=By.NAME)
+        self.send_keys(selector, password, selector_type=By.NAME, typing_delay=0.01)
 
     def _click_enter_button(self) -> None:
         self.click_element("//*[contains(text(), 'Entrar')]")
@@ -83,7 +83,7 @@ class AhgoraBrowser(BaseBrowser):
                 selector="buttonAdjustPunch",
                 selector_type=By.ID,
                 delay=0.1,
-                max_tries=5,
+                max_tries=10,
             )
         except Exception:
             self.wait(self.DELAY)
