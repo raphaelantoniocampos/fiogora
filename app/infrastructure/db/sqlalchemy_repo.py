@@ -27,6 +27,25 @@ from app.infrastructure.db.models import (
 )
 
 
+def _tasks_summary(
+    running: int, pending: int, completed: int, failed: int, cancelled: int
+) -> str:
+    """Job message derived from its tasks, e.g. "2 tarefas: 1 concluída, 1 com falha"."""
+    total = running + pending + completed + failed + cancelled
+    parts = [
+        f"{count} {label}"
+        for count, label in (
+            (running, "em execução"),
+            (pending, "pendente" if pending == 1 else "pendentes"),
+            (completed, "concluída" if completed == 1 else "concluídas"),
+            (failed, "com falha"),
+            (cancelled, "cancelada" if cancelled == 1 else "canceladas"),
+        )
+        if count
+    ]
+    return f"{total} {'tarefa' if total == 1 else 'tarefas'}: {', '.join(parts)}"
+
+
 class SqlAlchemyRepo:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -302,6 +321,8 @@ class SqlAlchemyRepo:
         - Else If ANY task is FAILED -> Job is FAILED
         - Else If there are MORE CANCELLED tasks than SUCCESS -> Job is CANCELLED
         - Else (All SUCCESS) -> Job is SUCCESS
+        With tasks, the job message becomes a summary of them (`message` is only used for
+        jobs without tasks), so it never contradicts the status.
         """
         db_job = await self.session.get(SyncJobModel, job_id)
         if not db_job:
@@ -354,7 +375,10 @@ class SqlAlchemyRepo:
         else:
             new_status = SyncStatus.SUCCESS
 
-        if new_status != db_job.status or message:
+        summary = _tasks_summary(
+            is_running, is_pending, completed, is_failed, is_cancelled
+        )
+        if new_status != db_job.status or summary != db_job.error_message:
             db_job.status = new_status
             if new_status in [
                 SyncStatus.SUCCESS,
@@ -363,8 +387,7 @@ class SqlAlchemyRepo:
             ]:
                 db_job.finished_at = datetime.now()
 
-            if message:
-                db_job.error_message = message
+            db_job.error_message = summary
 
             await self.session.commit()
 

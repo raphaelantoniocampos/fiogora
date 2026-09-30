@@ -16,6 +16,19 @@ from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
 
 logger = logging.getLogger(__name__)
 
+# Ahgora refuses a leave that overlaps one it already has, which means it is already there
+EXISTING_LEAVE_ERROR = "intersecção com afastamento existente"
+
+
+def _is_existing_leave(message: str) -> bool:
+    return EXISTING_LEAVE_ERROR in message.lower()
+
+
+def _mark_existing_leaves_as_success(results: list[dict]) -> None:
+    for result in results:
+        if _is_existing_leave(result["message"]):
+            result["status"] = "success"
+
 
 class LeaveSyncService:
     def __init__(self, repo: SqlAlchemyRepo):
@@ -104,6 +117,7 @@ class LeaveSyncService:
             error_count = 0
 
             successful_payloads = []
+            existing_payloads = []
 
             for result in results:
                 name = result["payload"].get("name", "N/A")
@@ -112,9 +126,9 @@ class LeaveSyncService:
                 cod_name = result["payload"].get("cod_name", "N/A")
 
                 if result["status"] == "success":
-                    if "Intersecção" in result["message"]:
+                    if _is_existing_leave(result["message"]):
                         ignored_count += 1
-                        # Silent ignore, do not log individually
+                        existing_payloads.append(result["payload"])
                     else:
                         imported_count += 1
                         successful_payloads.append(result["payload"])
@@ -139,13 +153,17 @@ class LeaveSyncService:
 
             batch_task.payload["leaves"] = successful_payloads
 
-            # Save successfully imported leaves to DB state
-            if successful_payloads:
-                await self.repo.save_ahgora_leaves_batch(successful_payloads)
+            # Save the imported leaves, and the ones Ahgora already had, to DB state. Without
+            # the latter, every sync sends the same ~550 existing leaves again.
+            if successful_payloads or existing_payloads:
+                await self.repo.save_ahgora_leaves_batch(
+                    successful_payloads + existing_payloads
+                )
                 await self.repo.add_log(
                     job_id,
                     "INFO",
-                    f"{len(successful_payloads)} afastamentos salvos no banco de dados",
+                    f"{len(successful_payloads)} afastamentos importados e "
+                    f"{len(existing_payloads)} que já existiam no Ahgora salvos no banco de dados",
                     task_id=batch_task.id,
                 )
 
@@ -275,8 +293,8 @@ class LeaveSyncService:
 
                 if not valid_indices:
                     log_cb("INFO", "Nenhum afastamento novo para importar")
-                    for result in results:
-                        result["status"] = "success"
+                    # Only the already existing ones are done; real errors stay errors
+                    _mark_existing_leaves_as_success(results)
                     return results
 
                 final_df = export_df.iloc[valid_indices]
@@ -293,12 +311,7 @@ class LeaveSyncService:
                 browser.confirm_import()
 
                 # Update leaves results
-                for result in results:
-                    if (
-                        "Intersecção com afastamento existente no registro".lower().strip()
-                        in result["message"].lower().strip()
-                    ):
-                        result["status"] = "success"
+                _mark_existing_leaves_as_success(results)
 
                 return results
 

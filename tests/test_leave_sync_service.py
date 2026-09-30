@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pandas as pd
@@ -169,3 +169,96 @@ async def test_execute_leaves_batch_catastrophic_failure():
     repo.update_task_status.assert_any_call(
         task_id, AutomationTaskStatus.FAILED, message="Browser crashed"
     )
+
+
+def _leave_task(payloads):
+    class MockTask:
+        def __init__(self):
+            self.id = uuid4()
+            self.type = "ADD_LEAVE"
+            self.status = AutomationTaskStatus.PENDING
+            self.payload = {"leaves": payloads}
+
+    return MockTask()
+
+
+def _leave_repo(task):
+    repo = MagicMock()
+    repo.get_automation_tasks_by_job = AsyncMock(return_value=[task])
+    repo.update_task_status = AsyncMock()
+    repo.save_ahgora_leaves_batch = AsyncMock()
+    repo.evaluate_and_update_job_status = AsyncMock()
+    repo.add_log = AsyncMock()
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_leaves_already_in_ahgora_are_saved_so_they_are_not_sent_again():
+    new, existing, broken = {"id": "000001"}, {"id": "000002"}, {"id": "000003"}
+    task = _leave_task([new, existing, broken])
+    repo = _leave_repo(task)
+    service = LeaveSyncService(repo=repo)
+    service._run_browser_batch_import = MagicMock(
+        return_value=[
+            {"payload": new, "status": "success", "message": "", "index": 0},
+            {
+                "payload": existing,
+                "status": "success",
+                "message": "Intersecção com afastamento existente no registro",
+                "index": 1,
+            },
+            {
+                "payload": broken,
+                "status": "error",
+                "message": "Data inválida",
+                "index": 2,
+            },
+        ]
+    )
+
+    await service.execute_leaves_batch(uuid4())
+
+    repo.save_ahgora_leaves_batch.assert_called_once_with([new, existing])
+    assert task.payload["leaves"] == [new]
+
+
+@pytest.mark.asyncio
+async def test_real_errors_stay_errors_when_no_row_is_left_to_import():
+    """All rows refused: only the ones Ahgora already has count as done."""
+    import asyncio
+
+    payloads = [
+        {
+            "id": "000001",
+            "cod": "001",
+            "start_date": "01/01/2026",
+            "end_date": "02/01/2026",
+        },
+        {
+            "id": "000002",
+            "cod": "001",
+            "start_date": "01/01/2026",
+            "end_date": "02/01/2026",
+        },
+    ]
+    browser = MagicMock()
+    browser.extract_import_errors.return_value = [
+        {"row": 1, "error": "Intersecção com afastamento existente no registro"},
+        {"row": 2, "error": "Código de afastamento inválido"},
+    ]
+    repo = MagicMock()
+    repo.add_log = AsyncMock()
+    service = LeaveSyncService(repo=repo)
+
+    with patch("app.services.leave_sync_service.AhgoraBrowser", return_value=browser):
+        results = await asyncio.to_thread(
+            service._run_browser_batch_import,
+            payloads,
+            uuid4(),
+            uuid4(),
+            asyncio.get_running_loop(),
+            asyncio.Lock(),
+        )
+
+    assert [r["status"] for r in results] == ["success", "error"]
+    browser.confirm_import.assert_not_called()

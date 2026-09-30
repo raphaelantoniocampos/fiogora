@@ -297,3 +297,65 @@ def test_access_log_hides_successful_polling(path, status, shown):
         '%s - "%s %s HTTP/%s" %d', ("127.0.0.1", "GET", path, "1.1", status)
     )
     assert QuietPollingFilter().filter(record) is shown
+
+
+# --- job message follows its tasks -------------------------------------------------------
+
+
+def _session_with(db_job, task_statuses):
+    session = MagicMock()
+    session.get = AsyncMock(return_value=db_job)
+    tasks = [MagicMock(status=status) for status in task_statuses]
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = tasks
+    session.execute = AsyncMock(return_value=result)
+    session.commit = AsyncMock()
+    return session
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "statuses, expected_status, expected_message",
+    [
+        (
+            ["success", "failed"],
+            SyncStatus.FAILED,
+            "2 tarefas: 1 concluída, 1 com falha",
+        ),
+        (["pending", "pending"], SyncStatus.PENDING, "2 tarefas: 2 pendentes"),
+        (
+            ["running", "success", "pending"],
+            SyncStatus.RUNNING,
+            "3 tarefas: 1 em execução, 1 pendente, 1 concluída",
+        ),
+        (["success"], SyncStatus.SUCCESS, "1 tarefa: 1 concluída"),
+        (["cancelled", "cancelled"], SyncStatus.CANCELLED, "2 tarefas: 2 canceladas"),
+    ],
+)
+async def test_job_message_summarizes_tasks(
+    statuses, expected_status, expected_message
+):
+    db_job = SyncJobModel(
+        id=uuid4(), status=SyncStatus.PENDING, error_message="Sincronização concluída"
+    )
+    session = _session_with(db_job, statuses)
+
+    await SqlAlchemyRepo(session).evaluate_and_update_job_status(
+        db_job.id, "Sincronização concluída"
+    )
+
+    assert db_job.status == expected_status
+    assert db_job.error_message == expected_message
+
+
+@pytest.mark.asyncio
+async def test_job_without_tasks_keeps_given_message():
+    db_job = SyncJobModel(id=uuid4(), status=SyncStatus.RUNNING)
+    session = _session_with(db_job, [])
+
+    await SqlAlchemyRepo(session).evaluate_and_update_job_status(
+        db_job.id, "Sincronização concluída"
+    )
+
+    assert db_job.status == SyncStatus.SUCCESS
+    assert db_job.error_message == "Sincronização concluída"
