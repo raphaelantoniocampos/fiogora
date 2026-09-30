@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api.endpoints import get_execution_service, get_service
 from app.core.database import get_db
+from app.core.security import create_access_token
 from app.domain.entities import AutomationTask, SyncJob, SyncLog
 from app.domain.enums import AutomationTaskStatus, AutomationTaskType
 from app.main import app
@@ -19,8 +20,55 @@ def client():
     # Override get_db dependency
     app.dependency_overrides[get_db] = lambda: mock_db
     with TestClient(app) as c:
+        # Logged in as "testuser" (the /api/sync endpoints require a session)
+        c.cookies.set(
+            "access_token", create_access_token({"sub": "testuser", "is_admin": False})
+        )
         yield c
     app.dependency_overrides.clear()
+
+
+def _mock_user_with_credentials(repo):
+    repo.get_user_by_username = AsyncMock(
+        return_value=MagicMock(id=uuid4(), username="testuser")
+    )
+    repo.get_user_credentials = AsyncMock(
+        return_value={
+            "fiorilli_user": "fuser",
+            "fiorilli_password": "fiorilli_pwd",
+            "ahgora_user": "auser",
+            "ahgora_password": "ahgora_pwd",
+            "ahgora_company": "acompany",
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "method, path",
+    [
+        ("get", "/api/sync/jobs"),
+        ("get", "/api/sync/public-key"),
+        ("post", f"/api/sync/jobs/{uuid4()}/kill"),
+        ("post", "/api/sync/jobs/kill-all"),
+        ("get", f"/api/sync/jobs/{uuid4()}/logs"),
+        ("post", f"/api/sync/tasks/{uuid4()}/execute"),
+    ],
+)
+def test_api_requires_login(method, path, client):
+    client.cookies.clear()
+    response = getattr(client, method)(path)
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Sessão expirada. Faça login novamente."
+    assert "HX-Redirect" not in response.headers
+
+
+def test_api_rejects_invalid_token_and_redirects_htmx_to_login(client):
+    client.cookies.set("access_token", "not-a-valid-token")
+    response = client.post(
+        f"/api/sync/jobs/{uuid4()}/kill", headers={"HX-Request": "true"}
+    )
+    assert response.status_code == 401
+    assert response.headers["HX-Redirect"] == "/login"
 
 
 def test_health_check(client):
@@ -218,6 +266,7 @@ def test_get_registry_diagnostics(mock_task, mock_registry, client):
 @patch("app.api.endpoints.TaskExecutionService")
 def test_execute_task(mock_exec_service_class, client):
     mock_exec_service = mock_exec_service_class.return_value
+    _mock_user_with_credentials(mock_exec_service.repo)
     mock_exec_service.execute_task = AsyncMock(return_value=True)
     task_id = uuid4()
 
@@ -236,6 +285,7 @@ def test_execute_task(mock_exec_service_class, client):
 @patch("app.api.endpoints.TaskExecutionService")
 def test_execute_batch_tasks(mock_exec_service_class, client):
     mock_exec_service = mock_exec_service_class.return_value
+    _mock_user_with_credentials(mock_exec_service.repo)
     mock_exec_service.execute_batch = AsyncMock(return_value=None)
     job_id = uuid4()
     task_type = "ADD_EMPLOYEE"
@@ -255,6 +305,7 @@ def test_execute_batch_tasks(mock_exec_service_class, client):
 @patch("app.api.endpoints.TaskExecutionService")
 def test_execute_all_job_tasks(mock_exec_service_class, client):
     mock_exec_service = mock_exec_service_class.return_value
+    _mock_user_with_credentials(mock_exec_service.repo)
     mock_exec_service.execute_all_tasks = AsyncMock(return_value=None)
     job_id = uuid4()
 

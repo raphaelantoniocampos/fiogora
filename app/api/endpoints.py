@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.logging import log_context
+from app.core.security import decode_access_token
 from app.core.settings import settings
 from app.core.task_registry import task_registry
 from app.domain.entities import AutomationTask, SyncJob, SyncLog
@@ -41,7 +42,22 @@ class SyncCredentials(BaseModel):
     ahgora_url: Optional[str] = None
 
 
-router = APIRouter()
+def require_api_auth(request: Request):
+    """The API is called by fetch/HTMX, so answer 401 instead of redirecting to /login
+    (HTMX still follows HX-Redirect to the login page)."""
+    token = request.cookies.get("access_token")
+    if token and decode_access_token(token):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Sessão expirada. Faça login novamente.",
+        headers={"HX-Redirect": "/login"}
+        if request.headers.get("HX-Request")
+        else None,
+    )
+
+
+router = APIRouter(dependencies=[Depends(require_api_auth)])
 
 
 def get_service(db: AsyncSession = Depends(get_db)):
@@ -76,10 +92,8 @@ async def run_sync_job(
     service: SyncService = Depends(get_service),
     db: AsyncSession = Depends(get_db),
 ):
-    # Get the current user (may be absent in tests)
-    username = getattr(request.state, "username", None)
+    username = request.state.username
 
-    # Authenticated path — use service.repo to resolve user
     repo = service.repo
     maybe_user = repo.get_user_by_username(username)
     user = await maybe_user if inspect.isawaitable(maybe_user) else maybe_user
@@ -275,14 +289,8 @@ async def execute_all_job_tasks(
     background_tasks: BackgroundTasks,
     exec_service: TaskExecutionService = Depends(get_execution_service),
 ):
-    # Allow test-mode (no authenticated user)
-    username = getattr(request.state, "username", None)
+    username = request.state.username
     repo = exec_service.repo
-
-    if not username:
-        # No user present (test mode/anonymous)
-        background_tasks.add_task(_run_all_tasks_standalone, job_id)
-        return {"message": "Execution of all tasks triggered", "job_id": str(job_id)}
 
     maybe_user = repo.get_user_by_username(username)
     user = await maybe_user if inspect.isawaitable(maybe_user) else maybe_user
@@ -394,14 +402,8 @@ async def execute_batch_tasks(
     background_tasks: BackgroundTasks,
     exec_service: TaskExecutionService = Depends(get_execution_service),
 ):
-    # Allow test-mode (no authenticated user)
-    username = getattr(request.state, "username", None)
+    username = request.state.username
     repo = exec_service.repo
-
-    if not username:
-        # No user present (test mode)
-        background_tasks.add_task(_run_batch_standalone, job_id, task_type)
-        return {"message": f"Batch task execution triggered for {task_type}"}
 
     maybe_user = repo.get_user_by_username(username)
     user = await maybe_user if inspect.isawaitable(maybe_user) else maybe_user
@@ -528,16 +530,9 @@ async def execute_task(
     background_tasks: BackgroundTasks,
     exec_service: TaskExecutionService = Depends(get_execution_service),
 ):
-    # Allow test-mode (no authenticated user) — run with default settings
-    username = getattr(request.state, "username", None)
+    username = request.state.username
     repo = exec_service.repo
 
-    if not username:
-        # No user present (test mode)
-        background_tasks.add_task(_run_task_standalone, task_id)
-        return {"message": "Task execution triggered", "task_id": str(task_id)}
-
-    # Authenticated path
     maybe_user = repo.get_user_by_username(username)
     user = await maybe_user if inspect.isawaitable(maybe_user) else maybe_user
     if user is None:
