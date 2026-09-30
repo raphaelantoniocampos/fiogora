@@ -89,14 +89,14 @@ uv run uvicorn app.main:app --reload
 
 ### 4. Deploy automático
 
-O servidor busca as atualizações sozinho (não precisa expor portas nem guardar senhas no GitHub). A cada 30 minutos, [`deploy/auto-deploy.sh`](deploy/auto-deploy.sh) verifica se a `main` tem um commit novo e, se o workflow **Tests** passou para ele e nenhuma sincronização/tarefa está rodando, faz `git pull` e `docker compose up -d --build` (as migrações rodam na inicialização do container).
+O servidor busca as atualizações sozinho (não precisa expor portas nem guardar senhas no GitHub). A cada 5 minutos, [`deploy/auto-deploy.sh`](deploy/auto-deploy.sh) verifica se a `main` tem um commit novo e, se o workflow **Tests** passou para ele e nenhuma sincronização/tarefa está rodando, faz `git pull` e `docker compose up -d --build` (as migrações rodam na inicialização do container).
 
 Requisitos no servidor: o projeto clonado com `git` na branch `main`, `.env` configurado e Docker Compose v2 (`docker compose`).
 
 **Instalação** (no servidor, dentro da pasta do projeto):
 
 ```bash
-(crontab -l 2>/dev/null | grep -v auto-deploy.sh; echo "*/30 * * * * $PWD/deploy/auto-deploy.sh --cron") | crontab -
+(crontab -l 2>/dev/null | grep -v auto-deploy.sh; echo "*/5 * * * * $PWD/deploy/auto-deploy.sh --cron") | crontab -
 ```
 
 **Deploy manual** (no servidor, ou de outra máquina com `ssh <servidor> fiogora/deploy/auto-deploy.sh`):
