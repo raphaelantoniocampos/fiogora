@@ -87,6 +87,29 @@ uv run uvicorn app.main:app --reload
 - **API**: `http://localhost:8000`
 - **Docs (Swagger)**: `http://localhost:8000/docs`
 
+### 4. Deploy automático
+
+O servidor busca as atualizações sozinho (não precisa expor portas nem guardar senhas no GitHub). A cada 30 minutos, [`deploy/auto-deploy.sh`](deploy/auto-deploy.sh) verifica se a `main` tem um commit novo e, se o workflow **Tests** passou para ele e nenhuma sincronização/tarefa está rodando, faz `git pull` e `docker compose up -d --build` (as migrações rodam na inicialização do container).
+
+Requisitos no servidor: o projeto clonado com `git` na branch `main`, `.env` configurado e Docker Compose v2 (`docker compose`).
+
+**Instalação** (no servidor, dentro da pasta do projeto):
+
+```bash
+(crontab -l 2>/dev/null | grep -v auto-deploy.sh; echo "*/30 * * * * $PWD/deploy/auto-deploy.sh --cron") | crontab -
+```
+
+**Deploy manual** (no servidor, ou de outra máquina com `ssh <servidor> fiogora/deploy/auto-deploy.sh`):
+
+| Comando | O que faz |
+|---|---|
+| `deploy/auto-deploy.sh` | Faz o deploy agora se houver commit novo, com as mesmas verificações, e mostra o status |
+| `deploy/auto-deploy.sh --force` | Reconstrói e reinicia mesmo que o commit já esteja no ar (ex.: depois de alterar o `.env`) |
+| `deploy/auto-deploy.sh --dry-run` | Faz todas as verificações sem fazer deploy |
+
+- **Log**: `~/.local/state/fiogora-deploy/deploy.log` (inclui os deploys manuais)
+- **Desativar o automático**: `crontab -l | grep -v auto-deploy.sh | crontab -`
+
 ---
 
 ## 📂 Estrutura do Projeto
