@@ -149,7 +149,7 @@ async def test_run_sync_background_credentials_not_set_fails_permanently():
         return_value=SyncResult(
             success=False,
             status=SyncStatus.FAILED,
-            message="Ahgora credentials not set (AHGORA_USER, password from frontend, AHGORA_COMPANY)",
+            message="Credenciais do Ahgora não configuradas (usuário, senha e empresa)",
         ),
     ):
         await service.run_sync_background(
@@ -168,7 +168,7 @@ async def test_run_sync_background_credentials_not_set_fails_permanently():
     repo.update_job_status.assert_any_call(
         job_id,
         SyncStatus.FAILED,
-        "Ahgora credentials not set (AHGORA_USER, password from frontend, AHGORA_COMPANY)",
+        "Credenciais do Ahgora não configuradas (usuário, senha e empresa)",
     )
 
 
@@ -211,10 +211,10 @@ async def test_validate_ahgora_state(mock_exists):
     log_text = " ".join(log_calls)
 
     # Check that it warns about missing in DB (ID 4)
-    assert "1 employees in Ahgora CSV not present in DB" in log_text
+    assert "1 funcionários do CSV do Ahgora não estão no banco" in log_text
 
     # Check that it warns about missing in CSV (ID 1)
-    assert "1 employees in DB not present in Ahgora CSV" in log_text
+    assert "1 funcionários do banco não estão no CSV do Ahgora" in log_text
 
     # Check that it finds discrepancies for common
-    assert "Found 1 employees with data discrepancies" in log_text
+    assert "1 funcionários com dados diferentes" in log_text

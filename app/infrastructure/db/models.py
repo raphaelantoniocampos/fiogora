@@ -49,6 +49,8 @@ class SyncLogModel(Base):
     level: Mapped[str] = mapped_column(String)
     message: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    # Who caused the entry (username, not a FK: the .env admin has no row in users)
+    username: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
 
     job: Mapped["SyncJobModel"] = relationship(back_populates="logs")
     task: Mapped[Optional["AutomationTaskModel"]] = relationship(back_populates="logs")

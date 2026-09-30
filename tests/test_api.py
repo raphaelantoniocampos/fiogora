@@ -371,8 +371,11 @@ def test_get_task_details_partial_group_tasks(mock_service_class, client):
     app.dependency_overrides.pop(api_get_service, None)
 
 
+@patch("app.infrastructure.web.routes.decode_access_token")
 @patch("app.infrastructure.web.routes.SyncService")
-def test_get_task_log_partial(mock_service_class, client):
+def test_get_task_log_partial(mock_service_class, mock_decode, client):
+    mock_decode.return_value = {"sub": "testuser", "is_admin": False}
+    client.cookies.set("access_token", "dummy_token")
     mock_service = mock_service_class.return_value
     task_id = uuid4()
     task = AutomationTask(

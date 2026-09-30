@@ -124,9 +124,9 @@ class BaseBrowser(ABC):
 
     def check_cancel(self):
         if self.cancel_event and self.cancel_event.is_set():
-            self._log("WARNING", "Browser execution cancelled via kill-switch")
+            self._log("WARNING", "Execução do navegador cancelada pelo usuário")
             self.close_driver()
-            raise BrowserCancelledException("Task cancelled by user.")
+            raise BrowserCancelledException("Tarefa cancelada pelo usuário")
 
     def wait(self, seconds: float):
         end_time = time.time() + seconds
@@ -217,9 +217,7 @@ class BaseBrowser(ABC):
             self.driver, delay, ignored_exceptions=ignored_exceptions
         ).until(EC.presence_of_element_located((selector_type, selector)))
         if clear_first:
-            self.driver.execute_script(
-                "arguments[0].value = '';", element
-            )
+            self.driver.execute_script("arguments[0].value = '';", element)
 
         if typing_delay:
             for char in keys:

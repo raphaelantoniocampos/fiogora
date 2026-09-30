@@ -58,12 +58,12 @@ class AhgoraBrowser(BaseBrowser):
             self._login()
 
     def download_employees(self):
-        self._log("INFO", "Starting employees download from Ahgora")
+        self._log("INFO", "Iniciando o download dos funcionários do Ahgora")
         try:
             self.driver.get(self.driver.current_url.replace("home", "funcionarios"))
             self._click_plus_button()
             self._export_to_csv()
-            self._log("INFO", "Download of employees from Ahgora completed")
+            self._log("INFO", "Download dos funcionários do Ahgora concluído")
         finally:
             self.close_driver()
 
@@ -74,7 +74,7 @@ class AhgoraBrowser(BaseBrowser):
 
         if not all([user, psw, company]):
             raise ValueError(
-                "Ahgora credentials not set (AHGORA_USER, password from frontend, AHGORA_COMPANY)"
+                "Credenciais do Ahgora não configuradas (usuário, senha e empresa)"
             )
 
         self._enter_username(user)
@@ -159,7 +159,7 @@ class AhgoraBrowser(BaseBrowser):
                 self._click_button("Continuar login")
             self.wait(0.5)
         raise TimeoutError(
-            f"Ahgora login did not redirect to the app (current url: {self.driver.current_url})"
+            f"O login do Ahgora não redirecionou para o sistema (url atual: {self.driver.current_url})"
         )
 
     def _end_previous_rpa_session(self) -> None:
@@ -198,7 +198,7 @@ class AhgoraBrowser(BaseBrowser):
         if not self._wait_adjust_punch_modal():
             return
 
-        self._log("INFO", "Closing Ahgora 'Ajuste de ponto' modal")
+        self._log("INFO", "Fechando o aviso 'Ajuste de ponto' do Ahgora")
         try:
             # "Entendi" is only enabled after a delay configured by the company
             self.retry_func(
@@ -209,7 +209,10 @@ class AhgoraBrowser(BaseBrowser):
             )
         except Exception as e:
             # Every flow leaves /home through driver.get, which discards the modal anyway
-            self._log("WARNING", f"Could not close Ahgora 'Ajuste de ponto' modal: {e}")
+            self._log(
+                "WARNING",
+                f"Não foi possível fechar o aviso 'Ajuste de ponto' do Ahgora: {e}",
+            )
 
     def _wait_adjust_punch_modal(self) -> bool:
         """Return True once the modal is shown, or False once the page is loaded with no pending AJAX."""
@@ -247,7 +250,7 @@ class AhgoraBrowser(BaseBrowser):
                 raise ValueError(error_msg)
             self.wait(0.5)
         raise TimeoutError(
-            f"Ahgora login did not reach the company step (current url: {self.driver.current_url})"
+            f"O login do Ahgora não chegou na escolha da empresa (url atual: {self.driver.current_url})"
         )
 
     def _click_plus_button(self) -> None:
@@ -266,7 +269,7 @@ class AhgoraBrowser(BaseBrowser):
         :param payload: Dictionary containing employee details (from Fiorilli)
         """
         name = payload.get("name", "")
-        self._log("INFO", f"Adding employee to Ahgora: {name}")
+        self._log("INFO", f"Cadastrando o funcionário no Ahgora: {name}")
 
         # Ensure we are on the employee page
         self.driver.get(self.driver.current_url.replace("home", "funcionarios"))
@@ -325,7 +328,7 @@ class AhgoraBrowser(BaseBrowser):
             except Exception as e:
                 self._log(
                     "WARNING",
-                    f"Could not update location multiselect automatically: {e}",
+                    f"Não foi possível ajustar a localização automaticamente: {e}",
                 )
 
         # Click Save
@@ -333,7 +336,7 @@ class AhgoraBrowser(BaseBrowser):
 
         # Small wait for the request to process
         self.wait(self.DELAY * 8)
-        self._log("INFO", f"Finished adding employee: {name} ({employee_id})")
+        self._log("INFO", f"Funcionário cadastrado: {name} ({employee_id})")
 
     def update_employee(self, payload: dict) -> None:
         """
@@ -341,7 +344,7 @@ class AhgoraBrowser(BaseBrowser):
         """
         name = payload.get("name_expected", "")
         employee_id = str(payload.get("id", ""))
-        self._log("INFO", f"Updating employee in Ahgora: {name}")
+        self._log("INFO", f"Atualizando o funcionário no Ahgora: {name}")
 
         # Navigate to employee page
         self.driver.get(
@@ -365,7 +368,7 @@ class AhgoraBrowser(BaseBrowser):
                     )
                     has_changes = True
                     change_logs.append(
-                        f"Updated name: {payload.get('name_actual')} -> {payload.get('name_expected')}"
+                        f"Nome alterado: {payload.get('name_actual')} → {payload.get('name_expected')}"
                     )
 
             if payload.get("position_expected_norm") != payload.get(
@@ -377,7 +380,7 @@ class AhgoraBrowser(BaseBrowser):
                     )
                     has_changes = True
                     change_logs.append(
-                        f"Updated position: {payload.get('position_actual')} -> {payload.get('position_expected')}"
+                        f"Cargo alterado: {payload.get('position_actual')} → {payload.get('position_expected')}"
                     )
 
             if payload.get("admission_date_expected_norm") != payload.get(
@@ -392,7 +395,7 @@ class AhgoraBrowser(BaseBrowser):
                     )
                     has_changes = True
                     change_logs.append(
-                        f"Updated admission_date: {payload.get('admission_date_actual')} -> {payload.get('admission_date_expected')}"
+                        f"Data de admissão alterada: {payload.get('admission_date_actual')} → {payload.get('admission_date_expected')}"
                     )
 
             if payload.get("department_expected_norm") != payload.get(
@@ -407,7 +410,7 @@ class AhgoraBrowser(BaseBrowser):
                     )
                     has_changes = True
                     change_logs.append(
-                        f"Updated department: {payload.get('department_actual')} -> {department_value}"
+                        f"Departamento alterado: {payload.get('department_actual')} → {department_value}"
                     )
 
             if payload.get("department_expected") and settings.UPDATE_LOCATIONS:
@@ -418,12 +421,12 @@ class AhgoraBrowser(BaseBrowser):
                     if loc_changed:
                         has_changes = True
                         change_logs.append(
-                            f"Updated location mapping based on department: {payload.get('department_expected')}"
+                            f"Localização ajustada conforme o departamento: {payload.get('department_expected')}"
                         )
                 except Exception as e:
                     self._log(
                         "WARNING",
-                        f"Could not update location multiselect automatically: {e}",
+                        f"Não foi possível ajustar a localização automaticamente: {e}",
                     )
 
             if has_changes:
@@ -432,15 +435,16 @@ class AhgoraBrowser(BaseBrowser):
                 self.wait(self.DELAY * 8)
                 for change in change_logs:
                     self._log("INFO", change)
-                self._log("INFO", f"Finished updating employee: {name} ({employee_id})")
+                self._log("INFO", f"Funcionário atualizado: {name} ({employee_id})")
             else:
                 self._log(
                     "INFO",
-                    f"No specific fields were changed for {name} ({employee_id}), skipping save.",
+                    f"Nenhum campo mudou para {name} ({employee_id}), nada a salvar",
                 )
         except Exception as e:
             self._log(
-                "ERROR", f"Failed to find or edit employee {name} ({employee_id}): {e}"
+                "ERROR",
+                f"Falha ao localizar ou editar o funcionário {name} ({employee_id}): {e}",
             )
             raise e
 
@@ -455,7 +459,8 @@ class AhgoraBrowser(BaseBrowser):
         position = str(payload.get("position", ""))
 
         self._log(
-            "INFO", f"Removing employee in Ahgora: {name} - {position} - {department}"
+            "INFO",
+            f"Desligando o funcionário no Ahgora: {name} - {position} - {department}",
         )
 
         self.driver.get(self.driver.current_url.replace("home", "funcionarios"))
@@ -485,16 +490,18 @@ class AhgoraBrowser(BaseBrowser):
             except Exception as e:
                 self._log(
                     "INFO",
-                    "No specific dismissal date field found, assumed standard removal",
+                    "Campo de data de desligamento não encontrado, usando o desligamento padrão",
                 )
                 raise e
 
             self._log(
                 "INFO",
-                f"Finished removing employee: {name} ({employee_id}) - {dismissal_date}",
+                f"Funcionário desligado: {name} ({employee_id}) em {dismissal_date}",
             )
         except Exception as e:
-            self._log("ERROR", f"Failed to remove employee {name} ({employee_id}): {e}")
+            self._log(
+                "ERROR", f"Falha ao desligar o funcionário {name} ({employee_id}): {e}"
+            )
             raise e
 
     def upload_leaves_file(self, file_path: str) -> None:
@@ -502,7 +509,7 @@ class AhgoraBrowser(BaseBrowser):
         Uploads a CSV/TXT file of leaves to Ahgora for validation (step 1).
         Does NOT save the records.
         """
-        self._log("INFO", "Starting leave upload to Ahgora")
+        self._log("INFO", "Enviando o arquivo de afastamentos para o Ahgora")
 
         import_path = settings.AHGORA_URL.replace("home", "afastamentos/importa")
         if import_path == settings.AHGORA_URL:  # Defense if URL structure was weird
@@ -521,16 +528,16 @@ class AhgoraBrowser(BaseBrowser):
             try:
                 self.click_element("pw_afimport_01", By.ID)
             except Exception:
-                self._log("DEBUG", "Could not find layout selector, assuming default.")
+                self._log("DEBUG", "Seletor de layout não encontrado, usando o padrão")
 
             # Click the upload/process button
             # Button labeled 'Obter Registros'
             self.click_element("//*/form/div[6]/button[2]")
 
             self.wait(self.DELAY * 5)  # Let the upload process
-            self._log("INFO", f"Finished uploading leaves file from {file_path}")
+            self._log("INFO", "Arquivo de afastamentos enviado")
         except Exception as e:
-            self._log("ERROR", f"Failed to upload leaves file: {e}")
+            self._log("ERROR", f"Falha ao enviar o arquivo de afastamentos: {e}")
             raise e
 
     def extract_import_errors(self) -> list[dict]:
@@ -562,11 +569,14 @@ class AhgoraBrowser(BaseBrowser):
                     row_idx = int(match.group(2))
                     errors.append({"row": row_idx, "error": error_msg})
 
-            self._log("INFO", f"Extracted {len(errors)} validation errors.")
+            self._log(
+                "INFO", f"{len(errors)} linhas recusadas pela validação do Ahgora"
+            )
             return errors
         except Exception as e:
             self._log(
-                "WARNING", f"Failed to extract import errors (could be 0 errors): {e}"
+                "WARNING",
+                f"Não foi possível ler os erros da importação (pode não haver nenhum): {e}",
             )
             return []
 
@@ -577,9 +587,9 @@ class AhgoraBrowser(BaseBrowser):
         try:
             self.click_element(selector="sendLeave", selector_type=By.ID)
             self.wait(self.DELAY * 20)
-            self._log("INFO", "Successfully confirmed and saved leaves import.")
+            self._log("INFO", "Importação de afastamentos confirmada e salva")
         except Exception as e:
-            self._log("ERROR", f"Failed to confirm leaves import: {e}")
+            self._log("ERROR", f"Falha ao confirmar a importação de afastamentos: {e}")
             raise e
 
     def _set_autocomplete_select(self, element_id: str, value: str) -> None:
@@ -625,9 +635,7 @@ class AhgoraBrowser(BaseBrowser):
             self.driver.execute_script(script)
             self.wait(1)
         except Exception as e:
-            self._log(
-                "WARNING", f"Failed to set autocomplete select '{element_id}': {e}"
-            )
+            self._log("WARNING", f"Falha ao preencher o campo '{element_id}': {e}")
             # Fallback to standard send keys without clear
             self.send_keys(element_id, value, By.ID, clear_first=False)
 
@@ -670,18 +678,20 @@ class AhgoraBrowser(BaseBrowser):
                                 ]
                             break
             except Exception as e:
-                self._log("WARNING", f"Could not read department_to_location.csv: {e}")
+                self._log(
+                    "WARNING", f"Não foi possível ler o department_to_location.csv: {e}"
+                )
 
         if not target_locations:
             self._log(
                 "INFO",
-                f"No location mapping found for department '{department_name}', skipping.",
+                f"Nenhuma localização mapeada para o departamento '{department_name}', mantendo a atual",
             )
             return False
 
         self._log(
             "INFO",
-            f"Enforcing locations {target_locations} for department '{department_name}'.",
+            f"Aplicando as localizações {', '.join(target_locations)} para o departamento '{department_name}'",
         )
 
         dropdown_btn_xpath = "//*[@id='form_funcionario']/div/div[2]/div[1]/div[2]/div[8]/div[2]/div/div/div/button"
@@ -694,7 +704,7 @@ class AhgoraBrowser(BaseBrowser):
                     max_tries=3,
                 )
             except Exception as e:
-                self._log("WARNING", f"Could not find multiselect button: {e}")
+                self._log("WARNING", f"Campo de localização não encontrado: {e}")
                 return False
 
         self.wait(1)
@@ -726,7 +736,7 @@ class AhgoraBrowser(BaseBrowser):
         try:
             changed = self.driver.execute_script(script, target_locations)
         except Exception as e:
-            self._log("WARNING", f"Failed to set locations via JS: {e}")
+            self._log("WARNING", f"Falha ao marcar as localizações: {e}")
 
         # Close the dropdown
         try:

@@ -65,7 +65,7 @@ async def test_execute_leaves_batch_success():
     repo.update_task_status.assert_any_call(
         task_id,
         AutomationTaskStatus.SUCCESS,
-        message="Batch completed: 1 imported, 0 existing ignored, 0 errors.",
+        message="Importação concluída: 1 importados, 0 já existentes ignorados, 0 com erro",
         payload=task.payload,
     )
 
@@ -125,7 +125,7 @@ async def test_execute_leaves_batch_with_validation_errors():
     repo.update_task_status.assert_any_call(
         task_id,
         AutomationTaskStatus.SUCCESS,
-        message="Batch completed: 1 imported, 0 existing ignored, 1 errors.",
+        message="Importação concluída: 1 importados, 0 já existentes ignorados, 1 com erro",
         payload=task.payload,
     )
 

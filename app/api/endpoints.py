@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.logging import log_context
 from app.core.settings import settings
 from app.core.task_registry import task_registry
 from app.domain.entities import AutomationTask, SyncJob, SyncLog
@@ -242,23 +243,25 @@ async def _run_all_tasks_standalone(
     ahgora_user: Optional[str] = None,
     ahgora_company: Optional[str] = None,
     ahgora_password: Optional[str] = None,
+    username: Optional[str] = None,
 ):
     from app.core.database import async_session_factory
     from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
 
-    async with async_session_factory() as session:
-        repo = SqlAlchemyRepo(session)
-        service = TaskExecutionService(repo=repo)
-        await service.execute_all_tasks(
-            job_id,
-            fiorilli_url=fiorilli_url,
-            fiorilli_user=fiorilli_user,
-            fiorilli_password=fiorilli_password,
-            ahgora_url=ahgora_url,
-            ahgora_user=ahgora_user,
-            ahgora_company=ahgora_company,
-            ahgora_password=ahgora_password,
-        )
+    with log_context(username=username):
+        async with async_session_factory() as session:
+            repo = SqlAlchemyRepo(session)
+            service = TaskExecutionService(repo=repo)
+            await service.execute_all_tasks(
+                job_id,
+                fiorilli_url=fiorilli_url,
+                fiorilli_user=fiorilli_user,
+                fiorilli_password=fiorilli_password,
+                ahgora_url=ahgora_url,
+                ahgora_user=ahgora_user,
+                ahgora_company=ahgora_company,
+                ahgora_password=ahgora_password,
+            )
 
 
 @router.post(
@@ -341,6 +344,7 @@ async def execute_all_job_tasks(
         ahgora_user,
         ahgora_company,
         ahgora_password,
+        user.username,
     )
     return {"message": "Execution of all tasks triggered", "job_id": str(job_id)}
 
@@ -355,24 +359,26 @@ async def _run_batch_standalone(
     ahgora_user: Optional[str] = None,
     ahgora_company: Optional[str] = None,
     ahgora_password: Optional[str] = None,
+    username: Optional[str] = None,
 ):
     from app.core.database import async_session_factory
     from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
 
-    async with async_session_factory() as session:
-        repo = SqlAlchemyRepo(session)
-        service = TaskExecutionService(repo=repo)
-        await service.execute_batch(
-            job_id,
-            task_type,
-            fiorilli_url=fiorilli_url,
-            fiorilli_user=fiorilli_user,
-            fiorilli_password=fiorilli_password,
-            ahgora_url=ahgora_url,
-            ahgora_user=ahgora_user,
-            ahgora_company=ahgora_company,
-            ahgora_password=ahgora_password,
-        )
+    with log_context(username=username):
+        async with async_session_factory() as session:
+            repo = SqlAlchemyRepo(session)
+            service = TaskExecutionService(repo=repo)
+            await service.execute_batch(
+                job_id,
+                task_type,
+                fiorilli_url=fiorilli_url,
+                fiorilli_user=fiorilli_user,
+                fiorilli_password=fiorilli_password,
+                ahgora_url=ahgora_url,
+                ahgora_user=ahgora_user,
+                ahgora_company=ahgora_company,
+                ahgora_password=ahgora_password,
+            )
 
 
 @router.post(
@@ -446,6 +452,7 @@ async def execute_batch_tasks(
         ahgora_user,
         ahgora_company,
         ahgora_password,
+        user.username,
     )
     return {"message": f"Batch task execution triggered for {task_type}"}
 
@@ -488,23 +495,25 @@ async def _run_task_standalone(
     ahgora_user: Optional[str] = None,
     ahgora_company: Optional[str] = None,
     ahgora_password: Optional[str] = None,
+    username: Optional[str] = None,
 ):
     from app.core.database import async_session_factory
     from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
 
-    async with async_session_factory() as session:
-        repo = SqlAlchemyRepo(session)
-        service = TaskExecutionService(repo=repo)
-        await service.execute_task(
-            task_id,
-            fiorilli_url=fiorilli_url,
-            fiorilli_user=fiorilli_user,
-            fiorilli_password=fiorilli_password,
-            ahgora_url=ahgora_url,
-            ahgora_user=ahgora_user,
-            ahgora_company=ahgora_company,
-            ahgora_password=ahgora_password,
-        )
+    with log_context(username=username):
+        async with async_session_factory() as session:
+            repo = SqlAlchemyRepo(session)
+            service = TaskExecutionService(repo=repo)
+            await service.execute_task(
+                task_id,
+                fiorilli_url=fiorilli_url,
+                fiorilli_user=fiorilli_user,
+                fiorilli_password=fiorilli_password,
+                ahgora_url=ahgora_url,
+                ahgora_user=ahgora_user,
+                ahgora_company=ahgora_company,
+                ahgora_password=ahgora_password,
+            )
 
 
 @router.post(
@@ -578,6 +587,7 @@ async def execute_task(
         ahgora_user,
         ahgora_company,
         ahgora_password,
+        user.username,
     )
     return {"message": "Task execution triggered", "task_id": str(task_id)}
 

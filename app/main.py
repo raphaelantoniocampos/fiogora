@@ -7,10 +7,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.endpoints import router as api_router
+from app.core.logging import log_context, setup_logging
 from app.core.scheduler import scheduler
 from app.core.settings import settings
 from app.infrastructure.web.routes import router as web_router
 
+setup_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -90,7 +92,8 @@ async def extend_auth_cookie_middleware(request: Request, call_next):
             request.state.is_admin = payload.get("is_admin", False)
             request.state.username = payload.get("sub", None)
 
-    response = await call_next(request)
+    with log_context(username=request.state.username):
+        response = await call_next(request)
 
     if token and request.url.path != "/logout":
         # Ensure we set cookie on response

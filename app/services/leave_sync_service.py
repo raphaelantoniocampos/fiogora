@@ -61,7 +61,7 @@ class LeaveSyncService:
             await self.repo.update_task_status(
                 batch_task.id,
                 AutomationTaskStatus.SUCCESS,
-                message="There are no leaves to import.",
+                message="Não há afastamentos para importar",
             )
             return
 
@@ -69,7 +69,7 @@ class LeaveSyncService:
         await self.repo.add_log(
             job_id,
             "INFO",
-            f"Starting integration of {len(batch_payloads)} leaves.",
+            f"Iniciando a importação de {len(batch_payloads)} afastamentos no Ahgora",
             task_id=batch_task.id,
         )
 
@@ -86,6 +86,7 @@ class LeaveSyncService:
                 self._run_browser_batch_import,
                 batch_payloads,
                 job_id,
+                batch_task.id,
                 loop,
                 log_lock,
                 cancel_event,
@@ -120,7 +121,7 @@ class LeaveSyncService:
                         await self.repo.add_log(
                             job_id,
                             "INFO",
-                            f"Leave imported: {name} - {cod_name} - {start} / {end}.",
+                            f"Afastamento importado: {name} - {cod_name} - {start} a {end}",
                             task_id=batch_task.id,
                         )
                 else:
@@ -129,11 +130,11 @@ class LeaveSyncService:
                     await self.repo.add_log(
                         job_id,
                         "ERROR",
-                        f"Failed to import {name}: {err_msg}.",
+                        f"Falha ao importar o afastamento de {name}: {err_msg}",
                         task_id=batch_task.id,
                     )
 
-            final_msg = f"Batch completed: {imported_count} imported, {ignored_count} existing ignored, {error_count} errors."
+            final_msg = f"Importação concluída: {imported_count} importados, {ignored_count} já existentes ignorados, {error_count} com erro"
             await self.repo.add_log(job_id, "INFO", final_msg, task_id=batch_task.id)
 
             batch_task.payload["leaves"] = successful_payloads
@@ -144,7 +145,7 @@ class LeaveSyncService:
                 await self.repo.add_log(
                     job_id,
                     "INFO",
-                    f"Saved {len(successful_payloads)} leaves to DB state.",
+                    f"{len(successful_payloads)} afastamentos salvos no banco de dados",
                     task_id=batch_task.id,
                 )
 
@@ -152,7 +153,7 @@ class LeaveSyncService:
                 await self.repo.update_task_status(
                     batch_task.id,
                     AutomationTaskStatus.FAILED,
-                    message="All rows failed",
+                    message="Todos os afastamentos falharam",
                     payload=batch_task.payload,
                 )
             else:
@@ -171,7 +172,7 @@ class LeaveSyncService:
             await self.repo.add_log(
                 job_id,
                 "ERROR",
-                f"Critical batch failure: {str(e)}.",
+                f"Falha crítica na importação de afastamentos: {str(e)}",
                 task_id=batch_task.id,
             )
 
@@ -181,6 +182,7 @@ class LeaveSyncService:
         self,
         batch_payloads: list[dict],
         job_id: UUID,
+        task_id: UUID,
         loop: asyncio.AbstractEventLoop,
         log_lock: asyncio.Lock,
         cancel_event: Optional[threading.Event] = None,
@@ -195,7 +197,7 @@ class LeaveSyncService:
 
         async def safe_log(level: str, msg: str):
             async with log_lock:
-                await self.repo.add_log(job_id, level, msg)
+                await self.repo.add_log(job_id, level, msg, task_id=task_id)
 
         def log_cb(level: str, msg: str):
             asyncio.run_coroutine_threadsafe(safe_log(level, msg), loop)
@@ -272,7 +274,7 @@ class LeaveSyncService:
                 ]
 
                 if not valid_indices:
-                    log_cb("INFO", "No leaves to import")
+                    log_cb("INFO", "Nenhum afastamento novo para importar")
                     for result in results:
                         result["status"] = "success"
                     return results
@@ -301,7 +303,7 @@ class LeaveSyncService:
                 return results
 
             except Exception as e:
-                log_cb("ERROR", f"Batch import process failed: {e}")
+                log_cb("ERROR", f"Falha no processo de importação: {e}")
                 for result in results:
                     result["status"] = "failed"
                 raise e

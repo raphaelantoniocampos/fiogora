@@ -1,74 +1,97 @@
-<div id="log-entries"
-    hx-get="/partials/log-entries?{% if task_id %}task_id={{ task_id }}{% else %}job_id={{ job_id }}{% endif %}{% if task_type %}&task_type={{ task_type }}{% endif %}"
-    {% if job_status|string=='running' or job_status|string=='SyncStatus.RUNNING' or
-    job_status|string=='AutomationTaskStatus.RUNNING' %} 
-    hx-trigger="every 5s" {%
-    endif %} 
-    hx-target="#log-entries" 
-    hx-swap="outerHTML" 
-    hx-on:htmx:afterSwap="this.scrollTop = this.scrollHeight"
-    class="bg-slate-900 p-4 font-mono text-[13px] leading-relaxed overflow-y-auto" 
-    style="max-height: 80vh;">
-    {% for group in grouped_logs %}
-    {% if group.is_job_log %}
-    {% for log in group.logs %}
-    <div class="flex py-0.5 hover:bg-slate-800/50 px-2 -mx-2 rounded">
-        <span class="text-slate-600 mr-4 flex-shrink-0 select-none tabular-nums">{{ log.timestamp.strftime('%H:%M:%S')
-            }}</span>
-        {% if log.level == 'ERROR' %}
-        <span class="text-red-400 font-bold mr-3 flex-shrink-0 w-14">[ERR]</span><span class="text-red-300">{{
-            log.message }}</span>
-        {% elif log.level == 'WARNING' %}
-        <span class="text-amber-400 mr-3 flex-shrink-0 w-14">[WRN]</span><span class="text-amber-200/80">{{ log.message
-            }}</span>
-        {% else %}
-        <span class="text-indigo-400/60 mr-3 flex-shrink-0 w-14">[INF]</span><span class="text-slate-300">{{ log.message
-            }}</span>
-        {% endif %}
-    </div>
-    {% endfor %}
+{% macro log_line(log, show_user=True) %}
+<div class="flex py-0.5 hover:bg-slate-800/50 px-2 -mx-2 rounded">
+    <span class="text-slate-600 mr-4 flex-shrink-0 select-none tabular-nums"
+        title="{{ log.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}">{{ log.timestamp.strftime('%H:%M:%S') }}</span>
+    {% if log.level == 'ERROR' %}
+    <span class="text-red-400 font-bold mr-3 flex-shrink-0 w-16">[ERRO]</span><span class="text-red-300 min-w-0 [overflow-wrap:anywhere]">{{
+        log.message }}</span>
+    {% elif log.level == 'WARNING' %}
+    <span class="text-amber-400 mr-3 flex-shrink-0 w-16">[AVISO]</span><span class="text-amber-200/80 min-w-0 [overflow-wrap:anywhere]">{{
+        log.message }}</span>
     {% else %}
-    <details
-        class="group bg-slate-800/30 rounded border border-slate-700/50 mt-1 mb-2 shadow-sm open:bg-slate-800/50 transition-colors"
-        open>
-        <summary class="flex items-center cursor-pointer p-2 hover:bg-slate-700/50 transition-colors rounded">
-            <svg class="w-4 h-4 mr-2 text-slate-500 transform transition-transform group-open:rotate-90 stroke-current"
-                fill="none" viewBox="0 0 24 24" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-            <span class="text-xs font-semibold text-slate-300 mr-2">Subtarefa:</span>
-            <span class="text-xs text-indigo-400 font-medium">[{{ (group.task_id | string).split('-')[0] }}...]</span>
-            <span class="ml-auto text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{{ group.logs|length
-                }}s</span>
-        </summary>
-        <div
-            class="px-2 py-2 border-t border-slate-700/50 bg-[#0d1117] rounded-b border-x border-b border-l-[3px] border-l-indigo-500/50">
-            {% for log in group.logs %}
-            <div class="flex py-0.5 hover:bg-slate-800/50 px-2 -mx-2 rounded">
-                <span class="text-slate-600 mr-4 flex-shrink-0 select-none tabular-nums">{{
-                    log.timestamp.strftime('%H:%M:%S') }}</span>
-                {% if log.level == 'ERROR' %}
-                <span class="text-red-400 font-bold mr-3 flex-shrink-0 w-14">[ERR]</span><span class="text-red-300">{{
-                    log.message }}</span>
-                {% elif log.level == 'WARNING' %}
-                <span class="text-amber-400 mr-3 flex-shrink-0 w-14">[WRN]</span><span class="text-amber-200/80">{{
-                    log.message }}</span>
-                {% else %}
-                <span class="text-indigo-400/60 mr-3 flex-shrink-0 w-14">[INF]</span><span class="text-slate-300">{{
-                    log.message }}</span>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    </details>
+    <span class="text-indigo-400/60 mr-3 flex-shrink-0 w-16">[INFO]</span><span class="text-slate-300 min-w-0 [overflow-wrap:anywhere]">{{
+        log.message }}</span>
     {% endif %}
-    {% else %}
-    <div class="text-slate-500 italic text-center py-8">Nenhum log disponível para esta execução.</div>
-    {% endfor %}
+    {% if show_user and log.username and log.username != owner %}
+    <span class="ml-auto pl-3 flex-shrink-0 font-sans text-[11px] text-sky-400/80"
+        title="Ação de outro usuário">{{ log.username }}</span>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% set is_running = job_status is not none and job_status|string == 'running' %}
+{% set base_url %}/partials/log-entries?{% if task_id %}task_id={{ task_id }}{% else %}job_id={{ job_id }}{% endif %}{% if task_type %}&task_type={{ task_type }}{% endif %}{% endset %}
+<div id="log-entries" hx-get="{{ base_url }}&level={{ level }}" {% if is_running %}hx-trigger="every 5s" {% endif %}
+    hx-target="this" hx-swap="outerHTML" class="bg-slate-900">
+    <!-- Level filter -->
+    <div class="flex items-center gap-1 px-4 py-2 border-b border-slate-800 text-xs" role="group"
+        aria-label="Filtrar por nível">
+        <span class="text-slate-500 mr-2">Mostrar:</span>
+        {% for key, label in [('all', 'Tudo'), ('warning', 'Avisos e erros'), ('error', 'Erros')] %}
+        <button type="button" hx-get="{{ base_url }}&level={{ key }}" hx-target="#log-entries" hx-swap="outerHTML"
+            aria-pressed="{{ 'true' if level == key else 'false' }}"
+            class="px-2.5 py-1 rounded-md transition-colors {% if level == key %}bg-slate-700 text-white{% else %}text-slate-400 hover:text-slate-200 hover:bg-slate-800{% endif %}">
+            {{ label }}
+            <span class="tabular-nums {% if key == 'error' and level_counts[key] %}text-red-400{% else %}text-slate-500{% endif %}">{{
+                level_counts[key] }}</span>
+        </button>
+        {% endfor %}
+    </div>
+
+    <div data-log-scroll class="p-4 font-mono text-[13px] leading-relaxed overflow-y-auto" style="max-height: 75vh; scrollbar-color: #334155 #0f172a;">
+        {% for group in grouped_logs %}
+        {% if group.is_date %}
+        <div class="flex items-center gap-3 my-2 font-sans text-[11px] text-slate-500">
+            <div class="h-px flex-1 bg-slate-800"></div>
+            {{ group.label }}
+            <div class="h-px flex-1 bg-slate-800"></div>
+        </div>
+        {% elif group.is_job_log %}
+        {% for log in group.logs %}{{ log_line(log) }}{% endfor %}
+        {% else %}
+        {% set has_error = group.logs | selectattr('level', 'equalto', 'ERROR') | list | length > 0 %}
+        <details
+            class="group bg-slate-800/30 rounded border border-slate-700/50 mt-1 mb-2 shadow-sm open:bg-slate-800/50 transition-colors"
+            open>
+            <summary class="flex items-center gap-2 cursor-pointer p-2 hover:bg-slate-700/50 transition-colors rounded">
+                <svg class="w-4 h-4 text-slate-500 transform transition-transform group-open:rotate-90 stroke-current flex-shrink-0"
+                    fill="none" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+                {% if has_error %}
+                <span class="h-2 w-2 rounded-full bg-red-400 flex-shrink-0" title="Contém erros"></span>
+                {% endif %}
+                <span class="text-xs font-semibold text-slate-200 truncate">{{ group.title }}</span>
+                {% if group.users %}
+                <span class="text-[11px] text-sky-400/80 flex-shrink-0">por {{ group.users | join(', ') }}</span>
+                {% endif %}
+                <span class="ml-auto text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{{
+                    group.logs|length }} {{ 'linha' if group.logs|length == 1 else 'linhas' }}</span>
+            </summary>
+            <div
+                class="px-2 py-2 border-t border-slate-700/50 bg-[#0d1117] rounded-b border-x border-b border-l-[3px] border-l-indigo-500/50">
+                {% for log in group.logs %}{{ log_line(log, show_user=False) }}{% endfor %}
+            </div>
+        </details>
+        {% endif %}
+        {% else %}
+        <div class="text-slate-500 italic text-center py-8">
+            {% if level == 'error' %}Nenhum erro nesta execução.
+            {% elif level == 'warning' %}Nenhum aviso ou erro nesta execução.
+            {% else %}Nenhum log disponível para esta execução.{% endif %}
+        </div>
+        {% endfor %}
+    </div>
     <script>
         (function () {
-            const container = document.currentScript.parentElement;
-            container.scrollTop = container.scrollHeight;
+            // Follow new lines while the reader is at the bottom; keep their place if they scrolled up
+            const box = document.currentScript.closest('#log-entries').querySelector('[data-log-scroll]');
+            const state = window.logScrollState || (window.logScrollState = { stick: true, top: 0 });
+            box.scrollTop = state.stick ? box.scrollHeight : state.top;
+            box.addEventListener('scroll', () => {
+                state.stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
+                state.top = box.scrollTop;
+            });
         })();
     </script>
 </div>

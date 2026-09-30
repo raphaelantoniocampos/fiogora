@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from app.core.file_manager import FileManager
+from app.core.logging import log_context
 from app.core.settings import settings
 from app.core.task_registry import task_registry
 from app.domain.entities import (
@@ -38,6 +39,14 @@ SYNC_TIMEOUT_MAX = settings.SYNC_TIMEOUT_MAX
 DATA_DIR = settings.DATA_DIR
 
 logger = logging.getLogger(__name__)
+
+# Errors that retrying cannot fix: wrong password ("Usuário ou senha ... inválido") or
+# missing credentials ("Credenciais do ... não configuradas")
+AUTH_ERROR_MARKERS = ("inválido", "invalido", "credenciais do", "credenciais não")
+
+
+def _is_auth_error(message: Optional[str]) -> bool:
+    return bool(message) and any(m in message.lower() for m in AUTH_ERROR_MARKERS)
 
 
 class SyncService:
@@ -90,8 +99,8 @@ class SyncService:
     async def get_job_status(self, job_id: UUID) -> Optional[SyncStatus]:
         return await self.repo.get_job_status(job_id)
 
-    async def list_jobs(self) -> list[SyncJob]:
-        return await self.repo.list_jobs()
+    async def list_jobs(self, username: Optional[str] = None) -> list[SyncJob]:
+        return await self.repo.list_jobs(username)
 
     async def get_job_logs(self, job_id: UUID) -> list[SyncLog]:
         return await self.repo.get_job_logs(job_id)
@@ -120,9 +129,35 @@ class SyncService:
             logger.error(f"Job {job_id} not found for execution")
             return
 
+        # Also reached by the retry scheduler, so take the user from the job itself
+        usernames = await self.repo.get_usernames() if job.user_id else {}
+        with log_context(username=usernames.get(job.user_id), job_id=job_id):
+            await self._run_sync_job(
+                job,
+                fiorilli_url,
+                fiorilli_user,
+                fiorilli_password,
+                ahgora_url,
+                ahgora_user,
+                ahgora_company,
+                ahgora_password,
+            )
+
+    async def _run_sync_job(
+        self,
+        job: SyncJob,
+        fiorilli_url: str,
+        fiorilli_user: str,
+        fiorilli_password: str,
+        ahgora_url: str,
+        ahgora_user: str,
+        ahgora_company: str,
+        ahgora_password: str,
+    ):
+        job_id = job.id
         async with self._db_lock:
             await self.repo.update_job_status(job_id, SyncStatus.RUNNING)
-        await self._log(job_id, "INFO", f"Started background sync for job {job_id}")
+        await self._log(job_id, "INFO", "Sincronização iniciada")
 
         # Register the current task
         current_task = asyncio.current_task()
@@ -153,14 +188,14 @@ class SyncService:
                 await self._log(
                     job_id,
                     "INFO",
-                    f"Job {job_id} finished successfully: {result.message}",
+                    "Sincronização concluída com sucesso",
                 )
             else:
                 # If it failed, check if we should retry (job level)
                 await self._handle_job_retry(job, error_msg=result.message)
 
         except TimeoutError:
-            error_msg = "Job timed out after 15 minutes of execution"
+            error_msg = f"Tempo limite de {SYNC_TIMEOUT_MAX} minutos excedido"
             logger.error(f"Job {job_id} timed out")
             try:
                 await self._handle_job_retry(job, error_msg=error_msg)
@@ -172,9 +207,9 @@ class SyncService:
             try:
                 async with self._db_lock:
                     await self.repo.update_job_status(
-                        job_id, SyncStatus.CANCELLED, "Job was cancelled by user"
+                        job_id, SyncStatus.CANCELLED, "Sincronização cancelada"
                     )
-                await self._log(job_id, "WARNING", "Job was cancelled")
+                await self._log(job_id, "WARNING", "Sincronização cancelada")
             except Exception as e:
                 logger.error(f"Failed to update status for cancelled job {job_id}: {e}")
             raise  # Re-raise to finalize task cancellation
@@ -199,23 +234,13 @@ class SyncService:
 
     async def _handle_job_retry(self, job: SyncJob, error_msg: Optional[str] = None):
         """Calculates next retry and updates job if retries are available."""
-        is_auth_error = False
-        if error_msg:
-            err_msg_lower = error_msg.lower()
-            if (
-                "inválidos" in err_msg_lower
-                or "invalidos" in err_msg_lower
-                or "credentials not set" in err_msg_lower
-                or "credentials missing" in err_msg_lower
-                or "credenciais não" in err_msg_lower
-            ):
-                is_auth_error = True
-
-        if job.retry_count >= self.MAX_JOB_RETRIES or is_auth_error:
-            final_msg = error_msg or "Max retries reached"
+        if job.retry_count >= self.MAX_JOB_RETRIES or _is_auth_error(error_msg):
+            final_msg = error_msg or "Número máximo de tentativas atingido"
             async with self._db_lock:
                 await self.repo.update_job_status(job.id, SyncStatus.FAILED, final_msg)
-            await self._log(job.id, "ERROR", f"Sync failed permanently: {final_msg}")
+            await self._log(
+                job.id, "ERROR", f"Sincronização falhou definitivamente: {final_msg}"
+            )
             return
 
         # Exponential backoff: 5m, 30m, 1h
@@ -233,7 +258,7 @@ class SyncService:
         await self._log(
             job.id,
             "WARNING",
-            f"Job failed. Scaled retry {job.retry_count + 1}/{self.MAX_JOB_RETRIES} scheduled for {next_retry}",
+            f"Sincronização falhou. Nova tentativa ({job.retry_count + 1}/{self.MAX_JOB_RETRIES}) agendada para {next_retry:%d/%m/%Y %H:%M}",
         )
 
     async def kill_job(self, job_id: UUID) -> bool:
@@ -275,7 +300,7 @@ class SyncService:
 
         # Update the status to CANCELLED
         async with self._db_lock:
-            log_msg = "Job was killed/cancelled by user request"
+            log_msg = "Sincronização cancelada pelo usuário"
             await self.repo.update_job_status(job_id, SyncStatus.CANCELLED, log_msg)
             await self._log(job_id, "WARNING", log_msg)
 
@@ -315,7 +340,8 @@ class SyncService:
     async def _log(self, job_id: UUID, level: str, message: str):
         # Log to standard logging
         log_func = getattr(logger, level.lower(), logger.info)
-        log_func(f"Job {job_id}: {message}")
+        with log_context(job_id=job_id):
+            log_func(message)
 
         # Persist to DB
         async with self._db_lock:
@@ -392,7 +418,7 @@ class SyncService:
                 await self._log(
                     job_id,
                     "INFO",
-                    f"Skipping {description} (valid cached ({MAX_AGE_MINUTES} minutes) files found: {patterns})",
+                    f"{description} ignorado: usando arquivos baixados há menos de {MAX_AGE_MINUTES} minutos",
                 )
                 return True
 
@@ -401,7 +427,7 @@ class SyncService:
                 await self._log(
                     job_id,
                     "INFO",
-                    f"Starting {description} (Attempt {attempt}/{max_retries})",
+                    f"{description}: tentativa {attempt}/{max_retries}",
                 )
 
                 def blocking_wrapper():
@@ -430,7 +456,7 @@ class SyncService:
                 try:
                     await asyncio.to_thread(blocking_wrapper)
                     await self._log(
-                        job_id, "INFO", f"Completed {description} on attempt {attempt}"
+                        job_id, "INFO", f"{description} concluído (tentativa {attempt})"
                     )
                     return True  # Success
                 except Exception as e:
@@ -438,10 +464,10 @@ class SyncService:
                     await self._log(
                         job_id,
                         "WARNING",
-                        f"Attempt {attempt}/{max_retries} for {description} failed: {str(e)}",
+                        f"{description}: tentativa {attempt}/{max_retries} falhou: {str(e)}",
                     )
-                    err_msg_lower = str(e).lower()
-                    if "inválidos" in err_msg_lower or "invalidos" in err_msg_lower:
+                    # Retrying a wrong password only risks locking the account
+                    if _is_auth_error(str(e)):
                         break
                     if attempt < max_retries:
                         await asyncio.sleep(10)  # Short wait before retry (10s backoff)
@@ -449,20 +475,20 @@ class SyncService:
             await self._log(
                 job_id,
                 "ERROR",
-                f"All {max_retries} attempts failed for {description}: {str(last_error)}",
+                f"{description} falhou: {str(last_error)}",
             )
             raise last_error
 
         try:
             if settings.HEADLESS_MODE:
                 await self._log(
-                    job_id, "INFO", "Running tasks concurrently (Headless Mode)"
+                    job_id, "INFO", "Baixando os dados em paralelo (navegador oculto)"
                 )
                 await asyncio.gather(
                     run_download_task_with_retries(
                         FiorilliBrowser,
                         "download_employees",
-                        "Fiorilli employees download",
+                        "Download de funcionários do Fiorilli",
                         fiorilli_url,
                         fiorilli_user,
                         fiorilli_password,
@@ -471,7 +497,7 @@ class SyncService:
                     run_download_task_with_retries(
                         FiorilliBrowser,
                         "download_leaves",
-                        "Fiorilli leaves download",
+                        "Download de afastamentos do Fiorilli",
                         fiorilli_url,
                         fiorilli_user,
                         fiorilli_password,
@@ -483,7 +509,7 @@ class SyncService:
                     run_download_task_with_retries(
                         AhgoraBrowser,
                         "download_employees",
-                        "Ahgora employees download",
+                        "Download de funcionários do Ahgora",
                         ahgora_url,
                         ahgora_user,
                         ahgora_password,
@@ -492,11 +518,13 @@ class SyncService:
                     ),
                 )
             else:
-                await self._log(job_id, "INFO", "Running tasks sequentially (UI Mode)")
+                await self._log(
+                    job_id, "INFO", "Baixando os dados em sequência (navegador visível)"
+                )
                 await run_download_task_with_retries(
                     FiorilliBrowser,
                     "download_employees",
-                    "Fiorilli employees download",
+                    "Download de funcionários do Fiorilli",
                     fiorilli_url,
                     fiorilli_user,
                     fiorilli_password,
@@ -505,7 +533,7 @@ class SyncService:
                 await run_download_task_with_retries(
                     FiorilliBrowser,
                     "download_leaves",
-                    "Fiorilli leaves download",
+                    "Download de afastamentos do Fiorilli",
                     fiorilli_url,
                     fiorilli_user,
                     fiorilli_password,
@@ -517,7 +545,7 @@ class SyncService:
                 await run_download_task_with_retries(
                     AhgoraBrowser,
                     "download_employees",
-                    "Ahgora employees download",
+                    "Download de funcionários do Ahgora",
                     ahgora_url,
                     ahgora_user,
                     ahgora_password,
@@ -537,28 +565,30 @@ class SyncService:
             return SyncResult(
                 success=True,
                 status=SyncStatus.SUCCESS,
-                message="Sync completed",
+                message="Sincronização concluída",
             )
         except Exception as e:
             logger.error(f"Sync failed after retries: {e}")
             return SyncResult(
                 success=False,
                 status=SyncStatus.FAILED,
-                message=f"Sync failed: {str(e)}",
+                message=f"Falha na sincronização: {str(e)}",
             )
 
     async def _run_analysis_and_create_tasks(self, job_id: UUID):
         try:
-            await self._log(job_id, "INFO", "Starting data analysis and task creation")
+            await self._log(
+                job_id, "INFO", "Iniciando a análise dos dados e a criação das tarefas"
+            )
 
             # 1. Process downloads (move files to expected locations)
             await self._log(
-                job_id, "INFO", "Moving downloaded files to data directory..."
+                job_id, "INFO", "Movendo os arquivos baixados para a pasta de dados..."
             )
             await asyncio.to_thread(FileManager.move_downloads_to_data_dir)
 
             # 2. Get data
-            await self._log(job_id, "INFO", "Loading employee data from files...")
+            await self._log(job_id, "INFO", "Carregando os dados de funcionários...")
             fiorilli_employees, ahgora_employees = await self._get_employees_data(
                 job_id
             )
@@ -573,15 +603,17 @@ class SyncService:
                 await self._log(
                     job_id,
                     "INFO",
-                    f"Loaded {len(ahgora_csv_employees)} employees from Ahgora CSV for cross-reference.",
+                    f"{len(ahgora_csv_employees)} funcionários carregados do CSV do Ahgora para conferência",
                 )
 
-            await self._log(job_id, "INFO", "Loading leave data from files...")
+            await self._log(job_id, "INFO", "Carregando os dados de afastamentos...")
             last_leaves, all_leaves = await self._get_leaves_data(job_id)
 
             leave_codes_path = settings.DATA_DIR / "mappings" / "leave_codes.csv"
             if leave_codes_path.exists():
-                await self._log(job_id, "INFO", "Enriching leave data with codes...")
+                await self._log(
+                    job_id, "INFO", "Associando os códigos aos afastamentos..."
+                )
                 leave_codes = await asyncio.to_thread(
                     self._read_csv, leave_codes_path, columns=["cod", "desc"]
                 )
@@ -593,7 +625,7 @@ class SyncService:
 
             # 3. Generate Task Dataframes
             await self._log(
-                job_id, "INFO", "Generating task dataframes (comparing datasets)..."
+                job_id, "INFO", "Comparando Fiorilli e Ahgora para gerar as tarefas..."
             )
             (
                 new_employees_df,
@@ -636,7 +668,7 @@ class SyncService:
                     await self._log(
                         job_id,
                         "INFO",
-                        f"DB-patched {len(patch_records)} dismissed employee(s) no longer in Ahgora.",
+                        f"{len(patch_records)} funcionário(s) desligado(s) que já não estão no Ahgora atualizado(s) direto no banco",
                     )
                     # Remove from dismissed_employees_df — no browser task needed
                     dismissed_employees_df = dismissed_employees_df[
@@ -644,9 +676,7 @@ class SyncService:
                     ]
 
             # 5. Create and persist AutomationTasks
-            await self._log(
-                job_id, "INFO", "Persisting automation tasks to database..."
-            )
+            await self._log(job_id, "INFO", "Salvando as tarefas no banco de dados...")
             await self._create_automation_tasks(
                 job_id,
                 new_employees_df,
@@ -656,14 +686,12 @@ class SyncService:
                 new_leaves_df,
             )
 
-            await self._log(
-                job_id, "INFO", "Data analysis and task creation completed successfully"
-            )
+            await self._log(job_id, "INFO", "Análise concluída e tarefas criadas")
 
             return ahgora_csv_employees
 
         except Exception as e:
-            error_msg = f"Critical error during analysis phase: {str(e)}"
+            error_msg = f"Erro crítico na análise dos dados: {str(e)}"
             logger.error(error_msg, exc_info=True)
             await self._log(job_id, "ERROR", error_msg)
             raise
@@ -676,7 +704,9 @@ class SyncService:
 
             if not raw_fiorilli_path.exists():
                 await self._log(
-                    job_id, "WARNING", f"Fiorilli file not found: {raw_fiorilli_path}"
+                    job_id,
+                    "WARNING",
+                    f"Arquivo do Fiorilli não encontrado: {raw_fiorilli_path}",
                 )
                 return pd.DataFrame(), pd.DataFrame()
 
@@ -689,18 +719,28 @@ class SyncService:
 
             if ahgora_employees.empty:
                 ahgora_employees = pd.DataFrame(columns=AHGORA_EMPLOYEES_COLUMNS)
-                await self._log(job_id, "INFO", "Database Ahgora state is empty.")
+                await self._log(
+                    job_id,
+                    "INFO",
+                    "Ainda não há funcionários do Ahgora salvos no banco",
+                )
             else:
-                await self._log(job_id, "INFO", "Ahgora state loaded from PostgreSQL.")
+                await self._log(
+                    job_id,
+                    "INFO",
+                    "Funcionários do Ahgora carregados do banco de dados",
+                )
 
             await self._log(
                 job_id,
                 "INFO",
-                f"Loaded {len(fiorilli_employees)} Fiorilli employees and {len(ahgora_employees)} Ahgora employees",
+                f"{len(fiorilli_employees)} funcionários do Fiorilli e {len(ahgora_employees)} do Ahgora carregados",
             )
             return fiorilli_employees, ahgora_employees
         except Exception as e:
-            await self._log(job_id, "ERROR", f"Error getting employee data: {str(e)}")
+            await self._log(
+                job_id, "ERROR", f"Erro ao carregar os dados de funcionários: {str(e)}"
+            )
             return pd.DataFrame(), pd.DataFrame()
 
     async def _get_leaves_data(self, job_id: UUID) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -718,7 +758,7 @@ class SyncService:
                     await self._log(
                         job_id,
                         "INFO",
-                        "Database Ahgora leaves empty, seeding from legacy CSV.",
+                        "Nenhum afastamento salvo no banco, usando o CSV legado como base",
                     )
                     last_leaves = await asyncio.to_thread(
                         self._read_csv, last_leaves_path
@@ -727,26 +767,30 @@ class SyncService:
                     await self._log(
                         job_id,
                         "INFO",
-                        "No historical leaves found in DB or legacy CSV.",
+                        "Nenhum histórico de afastamentos no banco nem no CSV legado",
                     )
             else:
                 await self._log(
                     job_id,
                     "INFO",
-                    f"Loaded {len(last_leaves)} historical leaves from PostgreSQL.",
+                    f"{len(last_leaves)} afastamentos já importados carregados do banco de dados",
                 )
 
             all_leaves_list = []
             if raw_vacations_path.exists():
                 df_vac = await asyncio.to_thread(self._read_csv, raw_vacations_path)
                 all_leaves_list.append(df_vac)
-                await self._log(job_id, "INFO", f"Loaded {len(df_vac)} new vacations")
+                await self._log(
+                    job_id, "INFO", f"{len(df_vac)} férias encontradas no Fiorilli"
+                )
 
             if raw_leaves_path.exists():
                 df_leaves = await asyncio.to_thread(self._read_csv, raw_leaves_path)
                 all_leaves_list.append(df_leaves)
                 await self._log(
-                    job_id, "INFO", f"Loaded {len(df_leaves)} new leaves/absences"
+                    job_id,
+                    "INFO",
+                    f"{len(df_leaves)} afastamentos encontrados no Fiorilli",
                 )
 
             all_leaves = (
@@ -756,12 +800,14 @@ class SyncService:
                 await self._log(
                     job_id,
                     "INFO",
-                    f"Total combined leaves for process: {len(all_leaves)}",
+                    f"{len(all_leaves)} afastamentos e férias no total para processar",
                 )
 
             return last_leaves, all_leaves
         except Exception as e:
-            await self._log(job_id, "ERROR", f"Error getting leave data: {str(e)}")
+            await self._log(
+                job_id, "ERROR", f"Erro ao carregar os dados de afastamentos: {str(e)}"
+            )
             return pd.DataFrame(), pd.DataFrame()
 
     def _read_csv(
@@ -1300,7 +1346,7 @@ class SyncService:
             await self._log(
                 job_id,
                 "INFO",
-                f"Seeded {len(seed_payloads)} employees directly to DB (already in Ahgora).",
+                f"{len(seed_payloads)} funcionários que já estavam no Ahgora salvos direto no banco",
             )
 
         if not new_employees_df.empty:
@@ -1355,20 +1401,18 @@ class SyncService:
             async with self._db_lock:
                 await self.repo.save_job(job)
 
-        await self._log(
-            job_id, "INFO", f"Created {len(tasks_to_create)} automation tasks"
-        )
+        await self._log(job_id, "INFO", f"{len(tasks_to_create)} tarefas criadas")
 
     async def _validate_ahgora_state(
         self, job_id: UUID, ahgora_employees: pd.DataFrame
     ):
         try:
-            await self._log(job_id, "INFO", "Validating CSV vs DB state")
+            await self._log(
+                job_id, "INFO", "Conferindo o CSV do Ahgora com o banco de dados"
+            )
 
             if ahgora_employees is None or ahgora_employees.empty:
-                await self._log(
-                    job_id, "WARNING", "No Ahgora CSV data available to validate"
-                )
+                await self._log(job_id, "WARNING", "Sem CSV do Ahgora para conferir")
                 return
 
             # Get current DB state
@@ -1376,7 +1420,9 @@ class SyncService:
 
             if db_employees.empty:
                 await self._log(
-                    job_id, "WARNING", "No DB state available to validate against CSV"
+                    job_id,
+                    "WARNING",
+                    "Sem funcionários no banco para conferir com o CSV",
                 )
                 return
 
@@ -1394,7 +1440,7 @@ class SyncService:
                 await self._log(
                     job_id,
                     "WARNING",
-                    f"Validation: {len(missing_in_db)} employees in Ahgora CSV not present in DB.",
+                    f"Conferência: {len(missing_in_db)} funcionários do CSV do Ahgora não estão no banco",
                 )
 
             if missing_in_csv:
@@ -1404,7 +1450,7 @@ class SyncService:
                 await self._log(
                     job_id,
                     "WARNING",
-                    f"Validation: {len(missing_in_csv)} employees in DB not present in Ahgora CSV. Check if dismissal syncing failed.",
+                    f"Conferência: {len(missing_in_csv)} funcionários do banco não estão no CSV do Ahgora. Verifique se algum desligamento falhou",
                 )
 
             # Validate column discrepancies for matching IDs
@@ -1429,7 +1475,7 @@ class SyncService:
                     await self._log(
                         job_id,
                         "WARNING",
-                        f"Validation: Found {mismatch_count} employees with data discrepancies between DB and Ahgora CSV.",
+                        f"Conferência: {mismatch_count} funcionários com dados diferentes entre o banco e o CSV do Ahgora",
                     )
                     # Log IDs for debugging
                     mismatched_ids = discrepancies_df["id"].tolist()
@@ -1438,11 +1484,11 @@ class SyncService:
                     await self._log(
                         job_id,
                         "INFO",
-                        "Validation: DB and Ahgora CSV state are completely synchronized for common employees.",
+                        "Conferência: banco de dados e CSV do Ahgora estão sincronizados",
                     )
 
         except Exception as e:
             logger.error(
                 f"Error during Ahgora state validation: {str(e)}", exc_info=True
             )
-            await self._log(job_id, "ERROR", f"Validation check failed: {str(e)}")
+            await self._log(job_id, "ERROR", f"Falha na conferência: {str(e)}")

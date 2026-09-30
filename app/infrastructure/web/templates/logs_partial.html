@@ -1,3 +1,4 @@
+<script>window.logScrollState = { stick: true, top: 0 };</script>
 <div class="card overflow-hidden bg-white">
     <!-- Header -->
     <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
@@ -9,41 +10,45 @@
                 </svg>
             </div>
             <div>
-                <h3 class="font-bold text-slate-800">Logs de Execução</h3>
-                <p class="text-[11px] text-slate-400 font-mono">Job {{ (job_id | string).split('-')[0] }}...</p>
+                <h3 class="font-bold text-slate-800">Logs da sincronização</h3>
+                <p class="text-[11px] text-slate-400">
+                    <span class="font-mono">{{ (job_id | string).split('-')[0] }}</span>
+                    {% if job %}· iniciada {% if owner %}por <span class="text-slate-600 font-medium">{{ owner }}</span>
+                    {% endif %}em {{ job.created_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+                </p>
             </div>
         </div>
-        <div class="flex items-center space-x-3">
-            {% if job_status|string == 'running' or job_status|string == 'SyncStatus.RUNNING' %}
+        <div class="flex items-center space-x-4">
+            {% if job_status is not none and job_status|string == 'running' %}
             <div class="flex items-center text-xs text-slate-400">
                 <span class="flex h-2 w-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
                 Executando
             </div>
             {% else %}
             <div class="flex items-center text-xs text-slate-400">
-                <span class="flex h-2 w-2 rounded-full bg-red mr-2"></span>
+                <span class="flex h-2 w-2 rounded-full bg-slate-300 mr-2"></span>
                 Terminado
             </div>
             {% endif %}
+            <button onclick="closeModal()" title="Fechar (Esc)"
+                class="text-slate-400 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-lg transition-all">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                    </path>
+                </svg>
+            </button>
         </div>
-        <button onclick="closeModal()"
-            class="text-slate-400 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-lg transition-all">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
-                </path>
-            </svg>
+    </div>
+
+    <!-- Log content (live-updating via its own partial) -->
+    {% include "log_entries_partial.html" %}
+
+    <!-- Footer -->
+    <div class="px-6 py-3 border-t border-slate-100 bg-slate-50/80 flex justify-between items-center">
+        <span class="text-xs text-slate-400">{{ logs | length }} {{ 'entrada' if logs | length == 1 else 'entradas'
+            }}</span>
+        <button onclick="closeModal()" class="text-xs text-slate-500 hover:text-slate-700 font-medium">
+            Fechar (Esc)
         </button>
     </div>
-</div>
-
-<!-- Log content (live-updating via its own partial) -->
-{% include "log_entries_partial.html" %}
-
-<!-- Footer -->
-<div class="px-6 py-3 border-t border-slate-100 bg-slate-50/80 flex justify-between items-center">
-    <span class="text-xs text-slate-400">{{ logs | length if logs else 'Várias' }} entradas</span>
-    <button onclick="closeModal()" class="text-xs text-slate-500 hover:text-slate-700 font-medium">
-        Fechar (Esc)
-    </button>
-</div>
 </div>

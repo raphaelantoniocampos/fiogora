@@ -75,7 +75,30 @@
 
     <div class="card overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-            <h3 class="font-semibold text-slate-800">Histórico Recente</h3>
+            <div class="flex items-center gap-3">
+                <h3 class="font-semibold text-slate-800">Histórico Recente</h3>
+                <select id="jobs-owner" name="owner" hx-get="/partials/jobs" hx-target="#jobs-list"
+                    hx-trigger="change" aria-label="Filtrar execuções por usuário"
+                    class="text-xs rounded-md border-slate-300 py-1 pl-2 pr-7 text-slate-600 focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="mine">Minhas execuções</option>
+                    <option value="all">Todas</option>
+                    {% for name in usernames %}
+                    <option value="{{ name }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <script>
+                    (function () {
+                        const select = document.getElementById('jobs-owner');
+                        let saved = null;
+                        try { saved = localStorage.getItem('jobsOwner'); } catch (e) { }
+                        const valid = Array.from(select.options).some(o => o.value === saved);
+                        select.value = valid ? saved : '{{ default_owner }}';
+                        select.addEventListener('change', () => {
+                            try { localStorage.setItem('jobsOwner', select.value); } catch (e) { }
+                        });
+                    })();
+                </script>
+            </div>
             <div class="flex items-center text-xs text-slate-400">
                 <span class="flex h-2 w-2 rounded-full bg-indigo-500 mr-2 animate-pulse"></span>
                 Atualizando automaticamente
@@ -88,6 +111,8 @@
                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">Job
                             ID</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">
+                            Usuário</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">
                             Status</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">
                             Duração</th>
@@ -98,9 +123,9 @@
                     </tr>
                 </thead>
                 <tbody id="jobs-list" hx-get="/partials/jobs" hx-trigger="load, refresh, every 5s" hx-swap="innerHTML"
-                    class="bg-white divide-y divide-slate-100">
+                    hx-include="#jobs-owner" hx-disinherit="hx-include" class="bg-white divide-y divide-slate-100">
                     <tr>
-                        <td colspan="5" class="px-6 py-12 text-center text-slate-400 italic">Carregando execuções...
+                        <td colspan="6" class="px-6 py-12 text-center text-slate-400 italic">Carregando execuções...
                         </td>
                     </tr>
                 </tbody>

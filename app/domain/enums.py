@@ -16,6 +16,15 @@ class AutomationTaskType(StrEnum):
     UPDATE_EMPLOYEE = auto()
     ADD_LEAVE = auto()
 
+    @property
+    def label(self) -> str:
+        return {
+            AutomationTaskType.ADD_EMPLOYEE: "Adicionar funcionário",
+            AutomationTaskType.REMOVE_EMPLOYEE: "Remover funcionário",
+            AutomationTaskType.UPDATE_EMPLOYEE: "Atualizar funcionário",
+            AutomationTaskType.ADD_LEAVE: "Importar afastamentos",
+        }[self]
+
 
 class AutomationTaskStatus(StrEnum):
     PENDING = auto()

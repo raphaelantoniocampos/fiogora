@@ -37,6 +37,7 @@ class SyncLog:
     message: str
     task_id: Optional[UUID] = None
     timestamp: datetime = field(default_factory=datetime.now)
+    username: Optional[str] = None
 
 
 @dataclass
@@ -51,3 +52,15 @@ class AutomationTask:
     finished_at: Optional[datetime] = None
     error_message: Optional[str] = None
     retry_count: int = 0
+
+    def describe(self) -> str:
+        """Readable label for logs, e.g. "Atualizar funcionário: FULANO DE TAL (123)"."""
+        if self.type == AutomationTaskType.ADD_LEAVE:
+            return f"{self.type.label} ({len(self.payload.get('leaves', []))})"
+        name = self.payload.get("name") or self.payload.get("name_expected")
+        employee_id = self.payload.get("id")
+        if not name:
+            return self.type.label
+        return f"{self.type.label}: {name}" + (
+            f" ({employee_id})" if employee_id else ""
+        )

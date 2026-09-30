@@ -5,6 +5,14 @@
             string).split('-')[0] }}...</div>
     </td>
     <td class="px-6 py-4 whitespace-nowrap">
+        {% set job_user = usernames.get(job.user_id) %}
+        {% if job_user %}
+        <span class="text-sm text-slate-700">{{ job_user }}</span>
+        {% else %}
+        <span class="text-sm text-slate-400 italic" title="Execução antiga, anterior ao registro do usuário">desconhecido</span>
+        {% endif %}
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap">
         {% set status_class = "bg-indigo-50 text-indigo-700" %}
         {% if job.status == 'success' %}{% set status_class = "bg-emerald-50 text-emerald-700"
         %}
@@ -25,7 +33,8 @@
                 </path>
             </svg>
             {% endif %}
-            {{ job.status }}
+            {{ {'pending': 'pendente', 'running': 'executando', 'success': 'sucesso', 'failed': 'falhou',
+            'cancelled': 'cancelada', 'retrying': 'nova tentativa'}.get(job.status|string, job.status) }}
         </span>
     </td>
     <td class="px-6 py-4 whitespace-nowrap">
@@ -102,14 +111,20 @@
 </tr>
 {% else %}
 <tr>
-    <td colspan="5" class="px-6 py-12 text-center text-slate-400 italic">
+    <td colspan="6" class="px-6 py-12 text-center text-slate-400 italic">
         <div class="flex flex-col items-center">
             <svg class="w-12 h-12 text-slate-200 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0V9a2 2 0 00-2-2H6a2 2 0 00-2 2v4m16 4v1a2 2 0 01-2 2H6a2 2 0 01-2-2v-1m16-4l-8 8-4-4">
                 </path>
             </svg>
+            {% if owner == 'mine' %}
+            Você ainda não iniciou nem executou tarefas de nenhuma sincronização. Selecione "Todas" para ver as dos outros usuários.
+            {% elif owner != 'all' %}
+            Nenhuma execução de {{ owner }}.
+            {% else %}
             Nenhuma execução encontrada no histórico.
+            {% endif %}
         </div>
     </td>
 </tr>

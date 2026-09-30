@@ -1,4 +1,5 @@
-<div class="card overflow-hidden bg-white w-[64rem]">
+<script>window.logScrollState = { stick: true, top: 0 };</script>
+<div class="card overflow-hidden bg-white w-[64rem] max-w-full">
     <!-- Header -->
     <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
         <div class="flex items-center space-x-3">
@@ -9,14 +10,13 @@
                 </svg>
             </div>
             <div>
-                <h3 class="font-bold text-slate-800">Logs da Tarefa Individual</h3>
-                <p class="text-[11px] text-slate-400 font-mono">Task {{ (task.id | string).split('-')[0] }}... - Job {{
-                    (task.job_id | string).split('-')[0] }}...</p>
+                <h3 class="font-bold text-slate-800">Logs da tarefa</h3>
+                <p class="text-[11px] text-slate-400">{{ task.describe() }} · sincronização <span class="font-mono">{{
+                        (task.job_id | string).split('-')[0] }}</span></p>
             </div>
         </div>
         <div class="flex items-center space-x-3">
-            {% if (task.status|string == 'running' or task.status|string == 'RUNNING' or task.status|string ==
-            'AutomationTaskStatus.RUNNING') or (task.status.name == 'RUNNING') %}
+            {% if job_status is not none and job_status|string == 'running' %}
             <div class="flex items-center text-xs text-slate-400">
                 <span class="flex h-2 w-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
                 Executando

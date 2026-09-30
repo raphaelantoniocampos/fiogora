@@ -3,9 +3,10 @@ from typing import List, Optional
 from uuid import UUID
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_log_context
 from app.domain.entities import (
     AutomationTask,
     AutomationTaskStatus,
@@ -29,6 +30,34 @@ from app.infrastructure.db.models import (
 class SqlAlchemyRepo:
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    @staticmethod
+    def _to_job(db: SyncJobModel) -> SyncJob:
+        return SyncJob(
+            id=db.id,
+            status=SyncStatus(db.status),
+            triggered_by=db.triggered_by,
+            user_id=db.user_id,
+            created_at=db.created_at,
+            started_at=db.started_at,
+            finished_at=db.finished_at,
+            error_message=db.error_message,
+            metadata_info=db.metadata_info,
+            retry_count=db.retry_count,
+            next_retry_at=db.next_retry_at,
+        )
+
+    @staticmethod
+    def _to_log(db: SyncLogModel) -> SyncLog:
+        return SyncLog(
+            id=db.id,
+            job_id=db.job_id,
+            task_id=db.task_id,
+            level=db.level,
+            message=db.message,
+            timestamp=db.timestamp,
+            username=db.username,
+        )
 
     async def get_user_by_username(self, username: str) -> Optional[UserModel]:
         result = await self.session.execute(
@@ -73,7 +102,8 @@ class SqlAlchemyRepo:
             self.session.add(db_job)
         else:
             db_job.status = job.status
-            db_job.user_id = job.user_id
+            if job.user_id is not None:
+                db_job.user_id = job.user_id
             db_job.started_at = job.started_at  # type: ignore
             db_job.finished_at = job.finished_at  # type: ignore
             db_job.error_message = job.error_message  # type: ignore
@@ -88,45 +118,37 @@ class SqlAlchemyRepo:
         if not db_job:
             return None
 
-        return SyncJob(
-            id=db_job.id,
-            status=SyncStatus(db_job.status),
-            triggered_by=db_job.triggered_by,
-            created_at=db_job.created_at,
-            started_at=db_job.started_at,
-            finished_at=db_job.finished_at,
-            error_message=db_job.error_message,
-            metadata_info=db_job.metadata_info,
-            retry_count=db_job.retry_count,
-            next_retry_at=db_job.next_retry_at,
-        )
+        return self._to_job(db_job)
 
     async def get_job_status(self, job_id: UUID) -> Optional[SyncStatus]:
         job = await self.get_job(job_id)
 
         return job.status if job else None
 
-    async def list_jobs(self) -> List[SyncJob]:
-        result = await self.session.execute(
-            select(SyncJobModel).order_by(SyncJobModel.created_at.desc())
-        )
-        db_jobs = result.scalars().all()
-
-        return [
-            SyncJob(
-                id=db.id,
-                status=SyncStatus(db.status),
-                triggered_by=db.triggered_by,
-                created_at=db.created_at,
-                started_at=db.started_at,
-                finished_at=db.finished_at,
-                error_message=db.error_message,
-                metadata_info=db.metadata_info,
-                retry_count=db.retry_count,
-                next_retry_at=db.next_retry_at,
+    async def list_jobs(self, username: Optional[str] = None) -> List[SyncJob]:
+        """All jobs, newest first. With `username`, only the jobs that user started or
+        worked on (ran or cancelled tasks), which leaves a log entry with their name."""
+        query = select(SyncJobModel).order_by(SyncJobModel.created_at.desc())
+        if username:
+            owner_id = (
+                select(UserModel.id)
+                .where(UserModel.username == username)
+                .scalar_subquery()
             )
-            for db in db_jobs
-        ]
+            worked_on = select(SyncLogModel.job_id).where(
+                SyncLogModel.username == username
+            )
+            query = query.where(
+                or_(SyncJobModel.user_id == owner_id, SyncJobModel.id.in_(worked_on))
+            )
+        result = await self.session.execute(query)
+        return [self._to_job(db) for db in result.scalars().all()]
+
+    async def get_usernames(self) -> dict[UUID, str]:
+        result = await self.session.execute(
+            select(UserModel.id, UserModel.username).order_by(UserModel.username)
+        )
+        return {user_id: username for user_id, username in result.all()}
 
     async def update_job_status(
         self, job_id: UUID, status: SyncStatus, message: Optional[str] = None
@@ -166,22 +188,7 @@ class SqlAlchemyRepo:
             .where(SyncJobModel.status == SyncStatus.RETRYING)
             .where(SyncJobModel.next_retry_at <= now)
         )
-        db_jobs = result.scalars().all()
-        return [
-            SyncJob(
-                id=db.id,
-                status=SyncStatus(db.status),
-                triggered_by=db.triggered_by,
-                created_at=db.created_at,
-                started_at=db.started_at,
-                finished_at=db.finished_at,
-                error_message=db.error_message,
-                metadata_info=db.metadata_info,
-                retry_count=db.retry_count,
-                next_retry_at=db.next_retry_at,
-            )
-            for db in db_jobs
-        ]
+        return [self._to_job(db) for db in result.scalars().all()]
 
     async def add_log(
         self, job_id: UUID, level: str, message: str, task_id: Optional[UUID] = None
@@ -192,6 +199,7 @@ class SqlAlchemyRepo:
             level=level,
             message=message,
             timestamp=datetime.now(),
+            username=get_log_context().get("username"),
         )
         self.session.add(db_log)
         await self.session.commit()
@@ -202,18 +210,7 @@ class SqlAlchemyRepo:
             .filter_by(job_id=job_id)
             .order_by(SyncLogModel.timestamp.asc())
         )
-        db_logs = result.scalars().all()
-        return [
-            SyncLog(
-                id=db.id,
-                job_id=db.job_id,
-                task_id=db.task_id,
-                level=db.level,
-                message=db.message,
-                timestamp=db.timestamp,
-            )
-            for db in db_logs
-        ]
+        return [self._to_log(db) for db in result.scalars().all()]
 
     async def get_task_logs(self, task_id: UUID) -> List[SyncLog]:
         result = await self.session.execute(
@@ -221,18 +218,7 @@ class SqlAlchemyRepo:
             .filter_by(task_id=task_id)
             .order_by(SyncLogModel.timestamp.asc())
         )
-        db_logs = result.scalars().all()
-        return [
-            SyncLog(
-                id=db.id,
-                job_id=db.job_id,
-                task_id=db.task_id,
-                level=db.level,
-                message=db.message,
-                timestamp=db.timestamp,
-            )
-            for db in db_logs
-        ]
+        return [self._to_log(db) for db in result.scalars().all()]
 
     async def save_automation_task(self, task: AutomationTask) -> None:
         db_task = await self.session.get(AutomationTaskModel, task.id)
@@ -612,7 +598,7 @@ class SqlAlchemyRepo:
             .where(SyncJobModel.status == SyncStatus.RUNNING)
             .values(
                 status=SyncStatus.FAILED,
-                error_message="System restarted/crashed. Job interrupted.",
+                error_message="Sistema reiniciado durante a execução. Sincronização interrompida.",
                 finished_at=datetime.now(),
             )
         )
@@ -623,7 +609,7 @@ class SqlAlchemyRepo:
             .where(AutomationTaskModel.status == AutomationTaskStatus.RUNNING)
             .values(
                 status=AutomationTaskStatus.FAILED,
-                error_message="System restarted/crashed. Task interrupted.",
+                error_message="Sistema reiniciado durante a execução. Tarefa interrompida.",
                 finished_at=datetime.now(),
             )
         )

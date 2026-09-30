@@ -75,7 +75,7 @@ class FiorilliBrowser(BaseBrowser):
 
         if not user or not psw:
             raise ValueError(
-                "Fiorilli credentials not set (FIORILLI_USER, password from frontend)"
+                "Credenciais do Fiorilli não configuradas (usuário e senha)"
             )
 
         self._enter_username("//input[@placeholder='(Usuário)']", user)

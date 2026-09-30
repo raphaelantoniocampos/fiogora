@@ -53,7 +53,7 @@ class TaskExecutionService:
         await self.repo.add_log(
             task.job_id,
             "INFO",
-            f"Starting web automation (Selenium) for task {task.type}.",
+            f"Iniciando automação no Ahgora: {task.describe()}",
             task_id=task_id,
         )
 
@@ -90,7 +90,7 @@ class TaskExecutionService:
             await self.repo.add_log(
                 task.job_id,
                 "ERROR",
-                f"Automation failure: {error_msg}.",
+                f"Falha na automação: {error_msg}",
                 task_id=task_id,
             )
 
@@ -99,7 +99,7 @@ class TaskExecutionService:
             await self.repo.add_log(
                 task.job_id,
                 "INFO",
-                "Automation completed successfully.",
+                "Automação concluída com sucesso",
                 task_id=task_id,
             )
             # Update Ahgora model state based on task success
@@ -110,7 +110,7 @@ class TaskExecutionService:
                 await self.repo.add_log(
                     task.job_id,
                     "WARNING",
-                    "Automation finished unsuccessfully, but without raising an exception.",
+                    "A automação terminou sem sucesso, mas sem informar o erro",
                     task_id=task_id,
                 )
 
@@ -278,7 +278,13 @@ class TaskExecutionService:
                     cancel_event.set()
 
             await self.repo.update_task_status(
-                task_id, TaskStatus.CANCELLED, "Cancelled by user via API"
+                task_id, TaskStatus.CANCELLED, "Cancelada pelo usuário"
+            )
+            await self.repo.add_log(
+                task.job_id,
+                "WARNING",
+                f"Tarefa cancelada: {task.describe()}",
+                task_id=task_id,
             )
             logger.info(f"Task {task_id} cancelled.")
 

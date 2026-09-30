@@ -38,6 +38,8 @@ class Settings:
     SYNC_TIMEOUT_MAX: int = int(os.getenv("SYNC_TIMEOUT_MAX", "30"))
     USE_CACHED_FILES: bool = os.getenv("USE_CACHED_FILES", "True").lower() == "true"
     UPDATE_LOCATIONS: bool = os.getenv("UPDATE_LOCATIONS", "True").lower() == "true"
+    # Log every SQL statement to the server log (very noisy, only for debugging)
+    SQL_ECHO: bool = os.getenv("SQL_ECHO", "False").lower() == "true"
 
     # Authentication
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")

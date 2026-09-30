@@ -16,6 +16,7 @@ from app.core.security import (
     verify_password,
 )
 from app.core.settings import settings
+from app.domain.entities import AutomationTask, SyncJob, SyncLog
 from app.domain.enums import SyncStatus
 from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
 from app.services.credential_crypto import decrypt_password, encrypt_password
@@ -208,11 +209,17 @@ async def dashboard(request: Request, service: SyncService = Depends(get_service
         "last_sync_date": last_sync_date,
     }
 
+    # The .env admin has no row in users (and cannot start syncs): show everything
+    usernames = sorted((await service.repo.get_usernames()).values())
+    default_owner = "mine" if request.state.username in usernames else "all"
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
             "stats": stats,
+            "usernames": usernames,
+            "default_owner": default_owner,
             "headless_mode": settings.HEADLESS_MODE,
             "use_cached_files": settings.USE_CACHED_FILES,
             "is_docker": settings.IS_DOCKER,
@@ -373,11 +380,21 @@ async def toggle_location_updates(request: Request):
 
 @router.get("/partials/jobs", dependencies=[Depends(require_auth)])
 async def get_jobs_partial(
-    request: Request, service: SyncService = Depends(get_service)
+    request: Request,
+    owner: str = "mine",
+    service: SyncService = Depends(get_service),
 ):
-    jobs = await service.list_jobs()
+    """History table. `owner` is "mine", "all" or a username."""
+    username = {"mine": request.state.username, "all": None}.get(owner, owner)
+    jobs = await service.list_jobs(username)
     return templates.TemplateResponse(
-        "jobs_partial.html", {"request": request, "jobs": jobs}
+        "jobs_partial.html",
+        {
+            "request": request,
+            "jobs": jobs,
+            "usernames": await service.repo.get_usernames(),
+            "owner": owner,
+        },
     )
 
 
@@ -526,31 +543,91 @@ async def get_task_details_partial(
             )
 
 
-def group_logs_chronologically(logs):
+LEVEL_FILTERS = {"warning": ("WARNING", "ERROR"), "error": ("ERROR",)}
+
+
+def group_logs_chronologically(
+    logs: list[SyncLog], tasks: Optional[Dict[UUID, AutomationTask]] = None
+) -> list[dict[str, Any]]:
+    """Group consecutive logs of the same task into one block titled with the task
+    description, and insert a date row whenever the day changes."""
+    tasks = tasks or {}
     grouped: list[dict[str, Any]] = []
-    current_group: dict[str, Any] | None = None
+    current: dict[str, Any] | None = None
+    last_day = None
     for log in logs:
+        day = log.timestamp.date()
+        if day != last_day:
+            grouped.append({"is_date": True, "label": day.strftime("%d/%m/%Y")})
+            last_day = day
+            current = None
         if not log.task_id:
             grouped.append({"task_id": None, "is_job_log": True, "logs": [log]})
-            current_group = None
-        else:
-            if current_group and current_group["task_id"] == log.task_id:
-                logs_list = current_group["logs"]
-                if isinstance(logs_list, list):
-                    logs_list.append(log)
-            else:
-                current_group = {
-                    "task_id": log.task_id,
-                    "is_job_log": False,
-                    "logs": [log],
-                }
-                grouped.append(current_group)
+            current = None
+            continue
+        if not current or current["task_id"] != log.task_id:
+            task = tasks.get(log.task_id)
+            current = {
+                "task_id": log.task_id,
+                "is_job_log": False,
+                "title": task.describe() if task else f"Tarefa {str(log.task_id)[:8]}",
+                "logs": [],
+                "users": [],
+            }
+            grouped.append(current)
+        current["logs"].append(log)
+        if log.username and log.username not in current["users"]:
+            current["users"].append(log.username)
     return grouped
 
 
-@router.get("/partials/task-log")
+def _filter_by_task_type(
+    logs: list[SyncLog], tasks: list[AutomationTask], task_type: Optional[str]
+) -> list[SyncLog]:
+    """Keep the job-level logs plus the logs of tasks of the given type."""
+    if not task_type:
+        return logs
+    task_ids = {t.id for t in tasks if t.type.name == task_type.upper()}
+    return [log for log in logs if not log.task_id or log.task_id in task_ids]
+
+
+def _log_view(
+    logs: list[SyncLog],
+    tasks: list[AutomationTask],
+    level: str,
+    owner: Optional[str] = None,
+) -> dict[str, Any]:
+    """Template context for log_entries_partial.html: level filter, counts and groups."""
+    counts = {
+        "all": len(logs),
+        "warning": sum(log.level in LEVEL_FILTERS["warning"] for log in logs),
+        "error": sum(log.level in LEVEL_FILTERS["error"] for log in logs),
+    }
+    if level in LEVEL_FILTERS:
+        logs = [log for log in logs if log.level in LEVEL_FILTERS[level]]
+    return {
+        "grouped_logs": group_logs_chronologically(logs, {t.id: t for t in tasks}),
+        "level": level if level in LEVEL_FILTERS else "all",
+        "level_counts": counts,
+        "owner": owner,
+    }
+
+
+async def _job_with_owner(
+    service: SyncService, job_id: UUID
+) -> tuple[Optional[SyncJob], Optional[str]]:
+    job = await service.get_job(job_id)
+    if not job or not job.user_id:
+        return job, None
+    return job, (await service.repo.get_usernames()).get(job.user_id)
+
+
+@router.get("/partials/task-log", dependencies=[Depends(require_auth)])
 async def get_task_log_partial(
-    request: Request, task_id: UUID, service: SyncService = Depends(get_service)
+    request: Request,
+    task_id: UUID,
+    level: str = "all",
+    service: SyncService = Depends(get_service),
 ):
     task = await service.repo.get_task(task_id)
     logs = await service.repo.get_task_logs(task_id)
@@ -560,45 +637,34 @@ async def get_task_log_partial(
             "request": request,
             "task": task,
             "logs": logs,
-            "grouped_logs": group_logs_chronologically(logs),
             "task_id": str(task_id),
             "job_status": task.status if task else None,
+            **_log_view(logs, [task] if task else [], level),
         },
     )
 
 
-@router.get("/partials/logs")
+@router.get("/partials/logs", dependencies=[Depends(require_auth)])
 async def get_logs_partial(
     request: Request,
     job_id: UUID,
     task_type: Optional[str] = None,
+    level: str = "all",
     service: SyncService = Depends(get_service),
 ):
-    logs = await service.get_job_logs(job_id)
-    if task_type:
-        tasks = await service.get_automation_tasks(job_id)
-        valid_task_ids = {
-            str(t.id)
-            for t in tasks
-            if str(t.type).upper() == task_type.upper()
-            or getattr(t.type, "name", str(t.type)).upper() == task_type.upper()
-        }
-        logs = [
-            log
-            for log in logs
-            if (log.task_id and str(log.task_id) in valid_task_ids) or not log.task_id
-        ]
-
-    job_status = await service.get_job_status(job_id)
+    tasks = await service.get_automation_tasks(job_id)
+    logs = _filter_by_task_type(await service.get_job_logs(job_id), tasks, task_type)
+    job, owner = await _job_with_owner(service, job_id)
     return templates.TemplateResponse(
         "logs_partial.html",
         {
             "request": request,
             "logs": logs,
-            "grouped_logs": group_logs_chronologically(logs),
+            "job": job,
             "job_id": str(job_id),
-            "job_status": job_status,
+            "job_status": job.status if job else None,
             "task_type": task_type,
+            **_log_view(logs, tasks, level, owner),
         },
     )
 
@@ -609,49 +675,35 @@ async def get_log_entries_partial(
     job_id: Optional[UUID] = None,
     task_id: Optional[UUID] = None,
     task_type: Optional[str] = None,
+    level: str = "all",
     service: SyncService = Depends(get_service),
 ):
+    """Refreshes the log list (polling while running, or when the level filter changes)."""
+    context: dict[str, Any]
     if task_id:
+        task = await service.repo.get_task(task_id)
         logs = await service.repo.get_task_logs(task_id)
-        return templates.TemplateResponse(
-            "log_entries_partial.html",
-            {
-                "request": request,
-                "grouped_logs": group_logs_chronologically(logs),
-                "task_id": str(task_id),
-            },
+        context = {
+            "task_id": str(task_id),
+            "job_status": task.status if task else None,
+            **_log_view(logs, [task] if task else [], level),
+        }
+    elif job_id:
+        tasks = await service.get_automation_tasks(job_id)
+        logs = _filter_by_task_type(
+            await service.get_job_logs(job_id), tasks, task_type
         )
-    if job_id:
-        logs = await service.get_job_logs(job_id)
-        job_status = await service.get_job_status(job_id)
-        if task_type:
-            tasks = await service.get_automation_tasks(job_id)
-            valid_task_ids = {
-                str(t.id)
-                for t in tasks
-                if str(t.type).upper() == task_type.upper()
-                or getattr(t.type, "name", str(t.type)).upper() == task_type.upper()
-            }
-            logs = [
-                log
-                for log in logs
-                if (log.task_id and str(log.task_id) in valid_task_ids)
-                or not log.task_id
-            ]
-
-        return templates.TemplateResponse(
-            "log_entries_partial.html",
-            {
-                "request": request,
-                "grouped_logs": group_logs_chronologically(logs),
-                "job_id": str(job_id),
-                "task_type": task_type,
-                "job_status": job_status,
-            },
-        )
-
+        job, owner = await _job_with_owner(service, job_id)
+        context = {
+            "job_id": str(job_id),
+            "task_type": task_type,
+            "job_status": job.status if job else None,
+            **_log_view(logs, tasks, level, owner),
+        }
+    else:
+        context = _log_view([], [], level)
     return templates.TemplateResponse(
-        "log_entries_partial.html", {"request": request, "grouped_logs": []}
+        "log_entries_partial.html", {"request": request, **context}
     )
 
 
