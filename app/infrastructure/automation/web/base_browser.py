@@ -103,6 +103,8 @@ class BaseBrowser(ABC):
             options.add_argument("-headless")
 
         options.set_preference("security.sandbox.content.level", 0)
+        # Selectors rely on Portuguese labels; the Ahgora login picks its language from the browser
+        options.set_preference("intl.accept_languages", "pt-BR, pt")
 
         # Ensure download directory exists
         settings.DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)

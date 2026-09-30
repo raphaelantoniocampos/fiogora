@@ -1,8 +1,15 @@
 import logging
+import time
 from typing import Callable, Optional
+from urllib.parse import urlparse
 
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    StaleElementReferenceException,
+)
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from app.core.settings import settings
 from app.infrastructure.automation.web.base_browser import BaseBrowser
@@ -11,6 +18,18 @@ logger = logging.getLogger(__name__)
 
 
 class AhgoraBrowser(BaseBrowser):
+    # Login page (login.ahgora.com.br, PO UI): email -> "Próximo" -> password -> "Entrar"
+    # -> company combo -> "Continuar" -> redirect to app.ahgora.com.br
+    LOGIN_HOST = "login.ahgora.com.br"
+    LOGIN_TIMEOUT = 60
+    # The OAuth redirect chain ends loading app.ahgora.com.br, which can take over a minute
+    REDIRECT_TIMEOUT = 180
+    BANNER_TIMEOUT = 15
+    EMAIL_INPUT = "input[name='email']"
+    PASSWORD_INPUT = "input[name='password']"
+    COMPANY_INPUT = "input[name='company']"
+    COMPANY_OPTION = "div.po-item-list__option"
+
     def __init__(
         self,
         ahgora_password: Optional[str] = None,
@@ -34,6 +53,8 @@ class AhgoraBrowser(BaseBrowser):
         try:
             self._login()
         except NoSuchElementException:
+            # The login page is a multi-step SPA, so restart it from the first step
+            self.driver.get(url)
             self._login()
 
     def download_employees(self):
@@ -56,57 +77,178 @@ class AhgoraBrowser(BaseBrowser):
                 "Ahgora credentials not set (AHGORA_USER, password from frontend, AHGORA_COMPANY)"
             )
 
-        self._enter_username("email", user)
-        self._click_enter_button()
-        self._enter_password("password", psw)
-        self._click_enter_button()
+        self._enter_username(user)
+        self._click_button("Próximo")
+        self._enter_password(psw)
+        self._click_button("Entrar")
         self._check_login_error()
         self._select_company(company)
+        self._click_button("Continuar")
+        self._wait_redirect_to_app()
         self._close_banner()
         self.wait(self.DELAY)
 
-    def _enter_username(self, selector: str, user: str) -> None:
-        self.send_keys(selector, user, selector_type=By.NAME, typing_delay=0.01)
+    def _enter_username(self, user: str) -> None:
+        self.send_keys(
+            self.EMAIL_INPUT,
+            user,
+            selector_type=By.CSS_SELECTOR,
+            clear_first=True,
+            typing_delay=0.01,
+        )
 
-    def _enter_password(self, selector: str, password: str) -> None:
-        self.send_keys(selector, password, selector_type=By.NAME, typing_delay=0.01)
+    def _enter_password(self, password: str) -> None:
+        self.send_keys(
+            self.PASSWORD_INPUT,
+            password,
+            selector_type=By.CSS_SELECTOR,
+            clear_first=True,
+            typing_delay=0.01,
+        )
 
-    def _click_enter_button(self) -> None:
-        self.click_element("//*[contains(text(), 'Entrar')]")
+    @staticmethod
+    def _button_xpath(label: str) -> str:
+        # PO UI buttons render as <button><div><span class="po-button-label">label</span></div></button>
+        # and carry the `disabled` attribute while loading, so wait until it is enabled.
+        return f"//button[not(@disabled)][.//span[normalize-space()='{label}']]"
+
+    def _click_button(self, label: str) -> None:
+        self.click_element(self._button_xpath(label))
+
+    def _is_displayed(self, xpath: str) -> bool:
+        try:
+            return any(
+                el.is_displayed() for el in self.driver.find_elements(By.XPATH, xpath)
+            )
+        except StaleElementReferenceException:
+            return False
 
     def _select_company(self, company: str) -> None:
-        self.click_element(f"//*[contains(text(), '{company}')]")
+        """Search the company in the PO UI combo (server-side filter) and pick the matching option."""
+        self.send_keys(
+            self.COMPANY_INPUT,
+            company,
+            selector_type=By.CSS_SELECTOR,
+            clear_first=True,
+            typing_delay=0.01,
+        )
+        self.retry_func(lambda: self._click_company_option(company), max_tries=15)
+
+    def _click_company_option(self, company: str) -> None:
+        # Option labels are "<code> - <name>"; the combo may split them with highlight tags
+        target = company.strip().upper()
+        for option in self.driver.find_elements(By.CSS_SELECTOR, self.COMPANY_OPTION):
+            if target in option.text.upper():
+                option.click()
+                return
+        raise ValueError(f"Empresa '{company}' não encontrada no Ahgora")
+
+    def _wait_redirect_to_app(self) -> None:
+        """
+        Wait until the login page redirects to the Ahgora app, handling the connected devices limit.
+        The redirect goes companies -> email -> email?client_id=pontoweb (OAuth) -> app.ahgora.com.br/home,
+        and the current url only changes once the (slow) app page starts rendering.
+        """
+        deadline = time.time() + self.REDIRECT_TIMEOUT
+        while time.time() < deadline:
+            url = urlparse(self.driver.current_url)
+            if url.netloc != self.LOGIN_HOST and not url.path.startswith("/login"):
+                return
+            if self._is_displayed(self._button_xpath("Continuar login")):
+                self._end_previous_rpa_session()
+                self._click_button("Continuar login")
+            self.wait(0.5)
+        raise TimeoutError(
+            f"Ahgora login did not redirect to the app (current url: {self.driver.current_url})"
+        )
+
+    def _end_previous_rpa_session(self) -> None:
+        """
+        Every run opens a new session from a fresh Firefox profile, so after a few runs Ahgora
+        blocks the login with the connected devices limit. End one session left by a previous
+        RPA run (Firefox on Linux); never end sessions that look like a person's browser.
+        """
+        rows = [
+            row
+            for row in self.driver.find_elements(By.CSS_SELECTOR, "po-modal tbody tr")
+            if "FIREFOX" in row.text.upper() and "LINUX" in row.text.upper()
+        ]
+        if not rows:
+            error_msg = (
+                "Limite de dispositivos conectados no Ahgora atingido. "
+                "Encerre uma sessão manualmente e tente novamente."
+            )
+            self._log("ERROR", error_msg)
+            raise ValueError(error_msg)
+
+        self._log(
+            "WARNING",
+            "Limite de dispositivos conectados no Ahgora atingido, encerrando sessão anterior do RPA",
+        )
+        rows[0].find_element(By.CSS_SELECTOR, "po-table-icon po-icon").click()
+        # Wait for the device to be removed and the table to refresh
+        self.wait(self.DELAY * 2)
 
     def _close_banner(self) -> None:
+        """
+        Dismiss the "Ajuste de ponto" modal (static backdrop) that /home may open after an AJAX
+        check for pending punch adjustments, only on some days of the month. Its "Entendi" button
+        is always in the DOM (hidden and disabled), so only act when the modal is actually shown.
+        """
+        if not self._wait_adjust_punch_modal():
+            return
+
+        self._log("INFO", "Closing Ahgora 'Ajuste de ponto' modal")
         try:
-            self.click_element(
-                selector="buttonAdjustPunch",
-                selector_type=By.ID,
-                delay=0.1,
-                max_tries=10,
+            # "Entendi" is only enabled after a delay configured by the company
+            self.retry_func(
+                lambda: WebDriverWait(self.driver, self.DELAY)
+                .until(EC.element_to_be_clickable((By.ID, "buttonAdjustPunch")))
+                .click(),
+                max_tries=20,
             )
-        except Exception:
-            self.wait(self.DELAY)
+        except Exception as e:
+            # Every flow leaves /home through driver.get, which discards the modal anyway
+            self._log("WARNING", f"Could not close Ahgora 'Ajuste de ponto' modal: {e}")
+
+    def _wait_adjust_punch_modal(self) -> bool:
+        """Return True once the modal is shown, or False once the page is loaded with no pending AJAX."""
+        idle_script = (
+            "return document.readyState === 'complete'"
+            " && !!window.jQuery && jQuery.active === 0"
+        )
+        deadline = time.time() + self.BANNER_TIMEOUT
+        idle_checks = 0
+        while time.time() < deadline:
+            if self._is_displayed("//*[@id='modalAdjustPunchAlert']"):
+                return True
+            try:
+                idle = self.driver.execute_script(idle_script)
+            except Exception:
+                idle = False
+            # Require a few idle checks in a row: the check only starts shortly after page load
+            idle_checks = idle_checks + 1 if idle else 0
+            if idle_checks >= 3:
+                return False
+            self.wait(0.5)
+        return False
 
     def _check_login_error(self) -> None:
-        """Check if the login error message is displayed after submitting credentials."""
-        self.wait(0.3)
-        try:
-            error_element = self.driver.find_element(
-                By.XPATH,
-                "//p[contains(text(), 'Dados incorretos, tente novamente.')]",
-            )
-            error_msg = "Usuário ou senha Ahgora inválido"
-            if error_element:
-                self._log(
-                    "ERROR",
-                    error_msg,
-                )
+        """Wait for the password step to resolve: either the company step loads or the error is shown."""
+        deadline = time.time() + self.LOGIN_TIMEOUT
+        while time.time() < deadline:
+            if self.driver.find_elements(By.CSS_SELECTOR, self.COMPANY_INPUT):
+                return
+            if self._is_displayed(
+                "//*[contains(text(), 'Dados incorretos, tente novamente.')]"
+            ):
+                error_msg = "Usuário ou senha Ahgora inválido"
+                self._log("ERROR", error_msg)
                 raise ValueError(error_msg)
-        except ValueError:
-            raise
-        except Exception:
-            pass
+            self.wait(0.5)
+        raise TimeoutError(
+            f"Ahgora login did not reach the company step (current url: {self.driver.current_url})"
+        )
 
     def _click_plus_button(self) -> None:
         self.click_element("mais", selector_type=By.ID)
