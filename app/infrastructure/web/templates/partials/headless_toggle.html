@@ -1,15 +1,16 @@
-<div id="headless-toggles" class="flex items-center justify-between p-5 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-sm transition-all w-full {% if is_docker %}opacity-60 grayscale{% endif %}">
-    <div class="pr-6">
+<div id="headless-toggles" class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-sm transition-all w-full">
+    <div class="sm:pr-6">
         <div class="font-semibold text-slate-800 text-sm mb-1">Navegador Oculto</div>
         <div class="text-xs text-slate-500 leading-relaxed">
-            {% if is_docker %}
-                Executa o navegador de forma silenciosa e em segundo plano. Dentro de containers Docker não é possível visualizar o navegador então esta opção não pode ser alterada.
-            {% else %}
-                Desative para ver o navegador sendo operado de forma automatizada ao vivo (ótimo para verificar ou apresentar visulamente como as rotinas de automação funcionam antes de enviar para background local).
-            {% endif %}
+            Com a opção ligada, a automação roda em segundo plano. Desligue para ver o navegador sendo operado ao vivo
+            (útil para acompanhar ou demonstrar as rotinas).
         </div>
+        {% if is_docker %}
+        <div class="mt-2 text-xs font-medium text-amber-700">No servidor o navegador é sempre oculto, então estas opções
+            não podem ser alteradas.</div>
+        {% endif %}
     </div>
-    <div class"flex-1 max-w-sm">
+    <div class="flex-shrink-0 space-y-2 sm:min-w-[13rem]">
         {% include 'partials/headless_sync_toggle.html' %}
         {% include 'partials/headless_tasks_toggle.html' %}
     </div>

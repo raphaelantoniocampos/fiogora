@@ -19,7 +19,11 @@ from app.domain.entities import AutomationTask, SyncJob, SyncLog
 from app.domain.enums import AutomationTaskType, SyncStatus
 from app.infrastructure.db.models import SyncJobModel
 from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
-from app.infrastructure.web.routes import _log_view, group_logs_chronologically
+from app.infrastructure.web.routes import (
+    _log_view,
+    format_duration,
+    group_logs_chronologically,
+)
 from app.main import app
 from app.services.sync_service import SyncService
 
@@ -359,3 +363,20 @@ async def test_job_without_tasks_keeps_given_message():
 
     assert db_job.status == SyncStatus.SUCCESS
     assert db_job.error_message == "Sincronização concluída"
+
+
+@pytest.mark.parametrize(
+    "seconds, expected",
+    [
+        (0, "0s"),
+        (45, "45s"),
+        (60, "1min"),
+        (1427, "23min 47s"),
+        (3600, "1h"),
+        (25705, "7h 8min"),
+        (90000, "1d 1h"),
+        (-5, "0s"),
+    ],
+)
+def test_format_duration(seconds, expected):
+    assert format_duration(seconds) == expected

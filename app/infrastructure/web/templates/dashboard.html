@@ -99,33 +99,26 @@
                     })();
                 </script>
             </div>
-            <div class="flex items-center text-xs text-slate-400">
-                <span class="flex h-2 w-2 rounded-full bg-indigo-500 mr-2 animate-pulse"></span>
-                Atualizando automaticamente
+            <div class="flex items-center text-xs text-slate-400" title="Atualizando automaticamente">
+                <span class="flex h-2 w-2 rounded-full bg-indigo-500 sm:mr-2 animate-pulse"></span>
+                <span class="hidden sm:inline">Atualizando automaticamente</span>
             </div>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
-                <thead class="bg-slate-50">
+            <table class="block md:table min-w-full divide-y divide-slate-200">
+                <thead class="hidden md:table-header-group bg-slate-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">Job
-                            ID</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">
-                            Usuário</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">
-                            Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">
-                            Duração</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">
-                            Mensagem/Progresso</th>
-                        <th class="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-widest">
-                            Ações</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">Início</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">Usuário</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">Mensagem</th>
+                        <th class="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-widest">Ações</th>
                     </tr>
                 </thead>
                 <tbody id="jobs-list" hx-get="/partials/jobs" hx-trigger="load, refresh, every 5s" hx-swap="innerHTML"
-                    hx-include="#jobs-owner" hx-disinherit="hx-include" class="bg-white divide-y divide-slate-100">
-                    <tr>
-                        <td colspan="6" class="px-6 py-12 text-center text-slate-400 italic">Carregando execuções...
+                    hx-include="#jobs-owner" hx-disinherit="hx-include" class="block md:table-row-group bg-white divide-y divide-slate-100">
+                    <tr class="block md:table-row">
+                        <td colspan="5" class="block md:table-cell px-6 py-12 text-center text-slate-400 italic">Carregando execuções...
                         </td>
                     </tr>
                 </tbody>

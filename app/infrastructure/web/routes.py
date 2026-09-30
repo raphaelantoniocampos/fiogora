@@ -26,6 +26,24 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/infrastructure/web/templates")
 
 
+def format_duration(seconds: float) -> str:
+    """25705 -> "7h 8min" (the two largest units)."""
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}min {seconds}s" if seconds else f"{minutes}min"
+    hours, minutes = divmod(minutes, 60)
+    if hours < 24:
+        return f"{hours}h {minutes}min" if minutes else f"{hours}h"
+    days, hours = divmod(hours, 24)
+    return f"{days}d {hours}h" if hours else f"{days}d"
+
+
+templates.env.filters["duration"] = format_duration
+
+
 def require_auth(request: Request):
     token = request.cookies.get("access_token")
     if not token or not decode_access_token(token):
@@ -407,6 +425,7 @@ async def get_task_groups_page(
     from app.domain.enums import AutomationTaskStatus
 
     tasks = await service.get_automation_tasks(job_id)
+    job = await service.get_job(job_id)
 
     def _default_group() -> Dict[str, Any]:
         return {
@@ -442,6 +461,7 @@ async def get_task_groups_page(
         {
             "request": request,
             "task_groups": list(groups.values()),
+            "job": job,
             "job_id": str(job_id),
             "headless_mode_tasks": settings.HEADLESS_MODE_TASKS,
             "is_docker": settings.IS_DOCKER,

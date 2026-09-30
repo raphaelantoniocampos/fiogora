@@ -9,7 +9,7 @@ def test_domain_imports():
 
 
 def test_settings_load():
-    assert settings.APP_NAME == "Fiogora"
+    assert settings.APP_NAME == "FioGora"
 
 
 def test_browser_import():

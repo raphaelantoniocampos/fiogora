@@ -9,7 +9,7 @@ load_dotenv()
 
 class Settings:
     # Base
-    APP_NAME: str = "Fiogora"
+    APP_NAME: str = "FioGora"
     VERSION: str = "1.0.0"
 
     # Paths

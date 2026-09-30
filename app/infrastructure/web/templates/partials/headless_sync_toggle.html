@@ -1,11 +1,9 @@
-<div id="headless-sync-toggles" class="flex items-center space-x-2 mr-4 p-2">
+<div id="headless-sync-toggles" class="flex items-center justify-between gap-4">
+    <span class="text-sm text-slate-700">Nos downloads</span>
     <button hx-post="/api/settings/toggle-headless" hx-vals='{"target": "sync"}' hx-target="#headless-sync-toggles"
-        class="text-xs px-3 py-1.5 rounded-md border font-medium transition-colors {% if headless_mode %}bg-indigo-50 text-indigo-700 border-indigo-200{% else %}bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100{% endif %}"
-        {% if is_docker %}disabled title="Não permitido em Docker" {% endif %}>
-        <span class="flex items-center">
-            <span
-                class="w-1.5 h-1.5 rounded-full mr-1.5 {% if headless_mode %}bg-indigo-500{% else %}bg-slate-400{% endif %}"></span>
-            Downloads
-        </span>
+        hx-swap="outerHTML" role="switch" aria-checked="{{ 'true' if headless_mode else 'false' }}" aria-label="Navegador oculto nos downloads"
+        {% if is_docker %}disabled title="No servidor o navegador é sempre oculto" {% endif %}
+        class="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 {% if is_docker %}cursor-not-allowed opacity-50{% else %}cursor-pointer{% endif %} {% if headless_mode %}bg-indigo-600{% else %}bg-slate-200{% endif %}">
+        <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out {% if headless_mode %}translate-x-5{% else %}translate-x-0{% endif %}"></span>
     </button>
 </div>

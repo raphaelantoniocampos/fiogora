@@ -1,10 +1,12 @@
 {% extends "base.html" %}
+{% from "partials/logo.html" import logo_mark, logo_name %}
 
 {% block content %}
 <div class="min-h-screen flex items-center justify-center -mt-10">
     <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 max-w-sm w-full transition-all hover:shadow-md">
         <div class="text-center mb-8">
-            <h2 class="text-2xl font-bold text-slate-800 tracking-tight">FioGora</h2>
+            <div class="flex justify-center mb-4">{{ logo_mark("w-12 h-12 rounded-xl text-xl") }}</div>
+            <h2>{{ logo_name("text-2xl") }}</h2>
             <p class="text-sm text-slate-500 mt-1">Insira suas credenciais para acessar</p>
         </div>
 

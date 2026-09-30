@@ -1,11 +1,13 @@
+{% from "partials/logo.html" import logo_mark, logo_name -%}
 <!DOCTYPE html>
 <html lang="pt-br">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Fiogora | Dashboard{% endblock %}</title>
-    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <title>{% block title %}FioGora | Dashboard{% endblock %}</title>
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -108,31 +110,40 @@
 
 <body class="min-h-screen">
     <nav class="glass-nav sticky top-0 z-50 p-4 shadow-sm">
-        <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-2">
-                <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">F
-                </div>
-                <h1 class="text-xl font-bold tracking-tight text-slate-800">Fiogora <span
-                        class="text-indigo-600 font-medium">RPA</span></h1>
-            </div>
-            <ul class="flex items-center space-x-8">
+        <div class="container mx-auto flex flex-wrap justify-between items-center">
+            <a href="/" class="flex items-center space-x-2">
+                {{ logo_mark() }}
+                <h1>{{ logo_name() }}</h1>
+            </a>
+            <!-- Phones: the links collapse behind this button -->
+            <button type="button" class="md:hidden p-2 -mr-2 rounded-lg text-slate-600 hover:bg-slate-100"
+                aria-label="Abrir menu" aria-controls="nav-menu" aria-expanded="false"
+                onclick="const menu = document.getElementById('nav-menu'); menu.classList.toggle('hidden'); this.setAttribute('aria-expanded', !menu.classList.contains('hidden'));">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16">
+                    </path>
+                </svg>
+            </button>
+            <ul id="nav-menu"
+                class="hidden w-full mt-3 pt-2 border-t border-slate-100 md:flex md:w-auto md:mt-0 md:pt-0 md:border-0 md:items-center md:space-x-8">
                 {% if request.state.username %}
                 <li><a href="/"
-                        class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">Dashboard</a>
+                        class="block py-2 md:py-0 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">Dashboard</a>
                 </li>
                 {% endif %}
-                <li><a href="/docs" class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+                <li><a href="/docs"
+                        class="block py-2 md:py-0 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
                         target="_blank">Documentação</a></li>
                 {% if request.state.username %}
                 <li><a href="/config"
-                        class="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">Configurações</a>
+                        class="block py-2 md:py-0 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">Configurações</a>
                 </li>
-                <li><span class="text-sm font-medium text-indigo-600 ml-2">
+                <li><span class="block py-2 md:py-0 text-sm font-medium text-indigo-600 md:ml-2">
                         {{ request.state.username }}
                     </span>
                 </li>
                 <li><a href="/logout"
-                        class="text-sm font-medium text-red-500 hover:text-red-700 transition-colors ml-2">
+                        class="block py-2 md:py-0 text-sm font-medium text-red-500 hover:text-red-700 transition-colors md:ml-2">
                         Sair
                     </a>
                 </li>
@@ -140,11 +151,11 @@
             </ul>
         </div>
     </nav>
-    <main class="container mx-auto p-8">
+    <main class="container mx-auto px-4 py-6 md:p-8">
         {% block content %}{% endblock %}
     </main>
     <footer class="container mx-auto p-8 text-center text-slate-400 text-sm">
-        &copy; 2026 Fiogora RPA. MIT License.
+        &copy; 2026 FioGora RPA. MIT License.
     </footer>
 
     <!-- Modal container -->

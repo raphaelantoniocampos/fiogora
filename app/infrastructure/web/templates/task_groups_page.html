@@ -15,10 +15,11 @@
             <div class="flex space-x-2 text-sm text-slate-500 mb-2 font-medium">
                 <a href="/" class="hover:text-indigo-600 transition-colors">Dashboard</a>
                 <span>/</span>
-                <span class="text-slate-700">Job {{ job_id.split('-')[0] }}...</span>
+                <span class="text-slate-700" title="Sincronização {{ job_id }}">Sincronização de {{
+                    job.created_at.strftime('%d/%m/%Y %H:%M') if job else job_id.split('-')[0] }}</span>
             </div>
             <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Grupos de Tarefas Automáticas</h2>
-            <p class="text-slate-500 mt-1">Visão geral das tarefas criadas por este Job.</p>
+            <p class="text-slate-500 mt-1">Visão geral das tarefas criadas por esta sincronização.</p>
         </div>
         <div class="flex space-x-3">
             <a href="/"
@@ -74,7 +75,8 @@
                         hx-trigger="load, refresh, click"
                         hx-swap="innerHTML"
                         onclick="document.getElementById('accordion-{{ loop.index }}').classList.toggle('hidden'); document.getElementById('icon-{{ loop.index }}').classList.toggle('rotate-90');">
-                        <td class="px-6 py-4 whitespace-nowrap flex items-center gap-3">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center gap-3">
                             <svg class="w-4 h-4 text-slate-400 transform transition-transform duration-200"
                                 id="icon-{{ loop.index }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7">
@@ -84,6 +86,7 @@
                             group.type|string %}
                             <span class="text-sm font-bold text-slate-700 hover:text-indigo-600 transition-colors">{{
                                 task_labels.get(type_str, type_str) }}</span>
+                            </div>
                         </td>
                         <td class="px-6 py-4">
                             <div
@@ -93,23 +96,31 @@
                                 {% if total > 0 %}
                                 {% set success_pct = (group.success / total) * 100 %}
                                 {% set running_pct = (group.running / total) * 100 %}
-                                {% set pending_pct = (group.pending / total) * 100 %}
                                 {% set failed_pct = (group.failed / total) * 100 %}
                                 {% set cancelled_pct = (group.cancelled / total) * 100 %}
                                 <div class="bg-emerald-500 h-2.5 progress-success" style="width: {{ success_pct }}%"></div>
                                 <div class="bg-blue-500 h-2.5 animate-pulse progress-running" style="width: {{ running_pct }}%"></div>
-                                <div class="bg-indigo-500 h-2.5 progress-pending" style="width: {{ pending_pct }}%"></div>
                                 <div class="bg-red-500 h-2.5 progress-failed" style="width: {{ failed_pct }}%"></div>
-                                <div class="bg-slate-200 h-2.5 progress-cancelled" style="width: {{ cancelled_pct }}%"></div>
+                                <div class="bg-slate-300 h-2.5 progress-cancelled" style="width: {{ cancelled_pct }}%"></div>
                                 {% endif %}
                             </div>
+                            <p class="text-[11px] text-slate-500 progress-caption">{{ group.success }} de {{ group.total }}
+                                {{ 'concluída' if group.total == 1 else 'concluídas' }}</p>
                         </td>
-                        <td class="px-6 py-4 text-center whitespace-nowrap" onclick="event.stopPropagation()">
-                            <div class="flex justify-center gap-2 text-xs font-medium" id="metrics-{{ group_id_str }}">
-                                <span class="text-emerald-600 bg-emerald-50 px-2 rounded metric-success" title="Sucesso">{{ group.success }}</span>
-                                <span class="text-indigo-600 bg-indigo-50 px-2 rounded metric-pending" title="Pendente">{{ group.pending }}</span>
-                                <span class="text-rose-600 bg-rose-50 px-2 rounded metric-failed" title="Falha">{{ group.failed }}</span>
-                                <span class="text-slate-600 bg-slate-50 px-2 rounded metric-cancelled" title="Cancelado">{{ group.cancelled }}</span>
+                        <td class="px-6 py-4 text-center" onclick="event.stopPropagation()">
+                            <div class="flex flex-wrap justify-center gap-1.5 text-xs font-medium" id="metrics-{{ group_id_str }}">
+                                {% for key, singular, plural, color in [
+                                ('success', 'concluída', 'concluídas', 'text-emerald-700 bg-emerald-50'),
+                                ('running', 'em execução', 'em execução', 'text-blue-700 bg-blue-50'),
+                                ('pending', 'pendente', 'pendentes', 'text-indigo-700 bg-indigo-50'),
+                                ('failed', 'com falha', 'com falha', 'text-rose-700 bg-rose-50'),
+                                ('cancelled', 'cancelada', 'canceladas', 'text-slate-600 bg-slate-100')] %}
+                                {% set count = group[key] %}
+                                <span data-singular="{{ singular }}" data-plural="{{ plural }}"
+                                    class="px-2 py-0.5 rounded-full whitespace-nowrap metric-{{ key }} {{ color }} {% if not count %}opacity-40{% endif %} {% if key == 'running' and not count %}hidden{% endif %}"><span
+                                        class="metric-value tabular-nums">{{ count }}</span> <span class="metric-label">{{
+                                        singular if count == 1 else plural }}</span></span>
+                                {% endfor %}
                             </div>
                         </td>
                         <td class="px-6 py-4 text-right whitespace-nowrap" onclick="event.stopPropagation()">
@@ -117,15 +128,16 @@
                                 {% if group.pending > 0 or group.failed > 0 or group.cancelled > 0 %}
                                 <button
                                     onclick="event.stopPropagation(); window.executeBatch('{{ job_id }}', '{{ group.type.value if group.type.value is defined else group.type }}', this)"
-                                    class="text-emerald-400 hover:text-emerald-700 p-3 hover:bg-emerald-50 rounded-full transition-all"
-                                    title="Executar Lote de Tarefas">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    class="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 pl-2 pr-3 py-1.5 mr-1 rounded-full transition-all flex items-center gap-1.5"
+                                    title="Executar as tarefas pendentes, com falha ou canceladas deste tipo">
+                                    <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z">
                                         </path>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
+                                    <span class="text-xs font-semibold">Executar</span>
                                 </button>
                                 {% endif %}
 
@@ -133,7 +145,7 @@
                                 <button
                                     onclick="event.stopPropagation(); window.cancelBatch('{{ job_id }}', '{{ group.type.value if group.type.value is defined else group.type }}', this)"
                                     class="text-red-400 hover:text-red-700 p-3 hover:bg-red-50 rounded-full transition-all"
-                                    title="Cancelar Lote de Tarefas">
+                                    title="Cancelar as tarefas pendentes deste tipo" aria-label="Cancelar as tarefas pendentes deste tipo">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -147,7 +159,8 @@
                                 <button hx-get="/partials/logs?job_id={{ job_id }}&task_type={{ group.type }}"
                                     hx-target="#modal-content"
                                     class="text-blue-400 hover:text-blue-700 p-3 hover:bg-blue-50 rounded-full transition-all"
-                                    title="Ver Logs do Lote" onclick="event.stopPropagation()">
+                                    title="Ver os logs deste tipo de tarefa" aria-label="Ver os logs deste tipo de tarefa"
+                                    onclick="event.stopPropagation()">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
@@ -227,7 +240,6 @@
                     if (total > 0) {
                         const successPct = (group.success / total) * 100;
                         const runningPct = (group.running / total) * 100;
-                        const pendingPct = (group.pending / total) * 100;
                         const failedPct = (group.failed / total) * 100;
                         const cancelledPct = (group.cancelled / total) * 100;
                         
@@ -236,29 +248,33 @@
                         if (progressBar) {
                             const pSuccess = progressBar.querySelector('.progress-success');
                             const pRunning = progressBar.querySelector('.progress-running');
-                            const pPending = progressBar.querySelector('.progress-pending');
                             const pFailed = progressBar.querySelector('.progress-failed');
                             const pCancelled = progressBar.querySelector('.progress-cancelled');
                             
                             if (pSuccess) pSuccess.style.width = `${successPct}%`;
                             if (pRunning) pRunning.style.width = `${runningPct}%`;
-                            if (pPending) pPending.style.width = `${pendingPct}%`;
                             if (pFailed) pFailed.style.width = `${failedPct}%`;
                             if (pCancelled) pCancelled.style.width = `${cancelledPct}%`;
                         }
                         
+                        const caption = row.querySelector('.progress-caption');
+                        if (caption) {
+                            caption.innerText = `${group.success} de ${total} ${total === 1 ? 'concluída' : 'concluídas'}`;
+                        }
+
                         // Update metrics numbers
                         const metrics = document.getElementById(`metrics-${group.type}`);
                         if (metrics) {
-                            const mSuccess = metrics.querySelector('.metric-success');
-                            const mPending = metrics.querySelector('.metric-pending');
-                            const mFailed = metrics.querySelector('.metric-failed');
-                            const mCancelled = metrics.querySelector('.metric-cancelled');
-                            
-                            if (mSuccess) mSuccess.innerText = group.success;
-                            if (mPending) mPending.innerText = group.pending;
-                            if (mFailed) mFailed.innerText = group.failed;
-                            if (mCancelled) mCancelled.innerText = group.cancelled;
+                            ['success', 'running', 'pending', 'failed', 'cancelled'].forEach(key => {
+                                const chip = metrics.querySelector(`.metric-${key}`);
+                                if (!chip) return;
+                                const count = group[key];
+                                chip.querySelector('.metric-value').innerText = count;
+                                chip.querySelector('.metric-label').innerText =
+                                    count === 1 ? chip.dataset.singular : chip.dataset.plural;
+                                chip.classList.toggle('opacity-40', !count);
+                                if (key === 'running') chip.classList.toggle('hidden', !count);
+                            });
                         }
                     }
                     

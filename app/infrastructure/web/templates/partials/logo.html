@@ -1,0 +1,9 @@
+{# Brand mark: the "F" square (also app/static/logo.svg, the favicon) #}
+{% macro logo_mark(size="w-8 h-8 rounded-lg text-base") %}
+<div class="{{ size }} bg-indigo-600 flex items-center justify-center text-white font-bold" aria-hidden="true">F</div>
+{% endmacro %}
+
+{% macro logo_name(size="text-xl") %}
+<span class="{{ size }} font-bold tracking-tight text-slate-800">FioGora <span
+        class="text-indigo-600 font-medium">RPA</span></span>
+{% endmacro %}
