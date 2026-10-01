@@ -1,101 +1,129 @@
-<div class="card overflow-hidden bg-white">
+{% set status = task_status(task) %}
+{% set changes = task_changes(task) %}
+{% set leaves = task.payload.get('leaves', []) if task.type == 'add_leave' else [] %}
+<div class="card overflow-hidden bg-white w-[48rem] max-w-full mx-auto" data-filter-scope>
     <!-- Header -->
-    <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
-        <div>
-            {% set t_status_class = "indigo-100 text-indigo-700" %}
-            {% if (task.status|string == 'SUCCESS' or task.status|string == 'AutomationTaskStatus.SUCCESS') or
-            (task.status.name == 'SUCCESS') %}{% set t_status_class = "emerald-100 text-emerald-700" %}
-            {% elif (task.status|string == 'FAILED' or task.status|string == 'AutomationTaskStatus.FAILED') or
-            (task.status.name == 'FAILED') %}{% set t_status_class = "rose-100 text-rose-700" %}
-            {% endif %}
-            <p class="text-[11px] {{ t_status_class }} font-mono uppercase tracking-wider">
-                {{ task.status }}
-            </p>
+    <div class="px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-4 bg-slate-50/80">
+        <div class="min-w-0">
+            <p class="text-xs font-medium text-slate-500">{{ task.type.label }}{% if task.payload.get('id') %} ·
+                matrícula {{ task.payload.get('id') }}{% endif %}</p>
+            <h3 class="mt-0.5 font-bold text-slate-800 truncate">{{ task_name(task) if task.type != 'add_leave' else
+                'Importação de afastamentos' }}</h3>
         </div>
-        <div>
-            <h3 class="font-bold text-slate-800">Dados da Tarefa</h3>
+        <div class="flex items-center gap-3 shrink-0">
+            <span class="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ring-1 ring-inset {{ status.style }}">{{
+                status.label }}</span>
+            <button onclick="closeModal()" title="Fechar (Esc)" aria-label="Fechar"
+                class="text-slate-400 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-lg transition-all">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
         </div>
-        <button onclick="closeModal()"
-            class="text-slate-400 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-lg transition-all"
-            title="Fechar (Esc)">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-        </button>
     </div>
 
+    <div class="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+        {% if task.status == 'failed' and task.error_message %}
+        <div class="rounded-lg bg-rose-50 ring-1 ring-inset ring-rose-200 px-4 py-3">
+            <p class="text-xs font-semibold text-rose-700">Erro na última execução</p>
+            <p class="mt-1 text-sm text-rose-700 [overflow-wrap:anywhere]">{{ task.error_message }}</p>
+        </div>
+        {% endif %}
 
+        {% if changes %}
+        <section>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">O que muda no Ahgora</h4>
+            <div class="rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+                {% for change in changes %}
+                <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-1 sm:gap-4 px-4 py-2.5">
+                    <span class="text-sm font-medium text-slate-500">{{ change.label }}</span>
+                    <span class="flex flex-wrap items-center gap-x-2 text-sm">
+                        <span class="text-slate-400 line-through">{{ change.before }}</span>
+                        <span class="text-slate-400" aria-hidden="true">→</span>
+                        <span class="font-semibold text-slate-800">{{ change.after }}</span>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
 
-    <!-- Content -->
-    <div class="overflow-x-auto overflow-y-auto w-full">
-        <table class="min-w-full max-h-[500px] divide-y divide-slate-200">
-            <thead class="bg-slate-50 sticky top-0 shadow-sm z-10">
-                <tr>
-                    <th
-                        class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase items-center justify-center">
-                        Payload</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 flex items-center justify-center">
-                <tr class="hover:bg-slate-50/50 transition-colors group">
-                    <td class="px-6 py-3">
-                        <div
-                            class="text-[12px] text-slate-600 bg-slate-50 p-3 rounded border border-slate-100 flex flex-col gap-1.5 max-w-lg shadow-inner max-h-[500px] overflow-y-auto custom-scrollbar">
-                            {% if task.payload %}
-                            {% for key, value in task.payload.items() %}
-                            <div
-                                class="border-b border-slate-200/60 last:border-0 py-2 last:pb-0 {% if value is iterable and value is not string and value is not mapping %}flex flex-col gap-2{% else %}flex justify-between items-center{% endif %}">
-                                <span class="font-semibold text-slate-500 capitalize">{{ key | replace('_', ' ')
-                                    }}:</span>
-                                {% if value is iterable and value is not string and value is not mapping %}
-                                <div class="w-full">
-                                    <div
-                                        class="text-[10px] text-slate-400 mb-1.5 flex justify-end font-medium uppercase tracking-wider">
-                                        <span>[{{ value | length }} items]</span>
-                                    </div>
-                                    <ul class="max-h-48 overflow-y-auto space-y-1.5 pr-2 custom-scrollbar">
-                                        {% for item in value %}
-                                        <li
-                                            class="font-mono text-[10px] text-slate-600 bg-white p-2 rounded shadow-sm border border-slate-200 flex flex-col gap-1 transition-all hover:border-indigo-200">
-                                            {% if item is mapping %}
-                                            {% if item.get('name') %}
-                                            <span class="font-semibold text-slate-800 text-xs">{{ item.get('name')
-                                                }}</span>
-                                            {% endif %}
-                                            <div class="flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
-                                                {% for k, v in item.items() if k != 'name' %}
-                                                <span><strong class="font-medium text-slate-400 capitalize">{{ k |
-                                                        replace('_', ' ') }}:</strong> <span class="text-slate-700">{{ v
-                                                        or '-' }}</span></span>
-                                                {% endfor %}
-                                            </div>
-                                            {% else %}
-                                            <span>{{ item }}</span>
-                                            {% endif %}
-                                        </li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                                {% else %}
-                                <span class="font-mono text-slate-700 text-right ml-4 max-w-[70%] break-words">{{ value
-                                    or '-' }}</span>
-                                {% endif %}
-                            </div>
+        {% if task.type == 'add_leave' %}
+        <section>
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Afastamentos <span class="font-normal normal-case tracking-normal text-slate-400">(<span
+                            data-filter-count>{{ leaves | length }}</span>)</span>
+                </h4>
+                <input type="search" placeholder="Buscar por nome, matrícula ou tipo" aria-label="Buscar afastamento"
+                    oninput="filterList(this, '[data-leave]')"
+                    class="w-full sm:w-72 rounded-md border border-slate-300 py-1.5 px-3 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+            <div class="rounded-lg ring-1 ring-slate-200 overflow-hidden">
+                <div class="max-h-[45vh] overflow-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 sticky top-0">
+                            <tr class="text-left text-xs font-semibold text-slate-500">
+                                <th class="px-3 py-2 w-1/2">Funcionário</th>
+                                <th class="px-3 py-2">Tipo</th>
+                                <th class="px-3 py-2 whitespace-nowrap">Período</th>
+                                <th class="px-3 py-2 text-right">Dias</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for leave in leaves %}
+                            <tr data-leave
+                                data-search="{{ (leave.get('name', '') ~ ' ' ~ leave.get('id', '') ~ ' ' ~ leave.get('cod_name', '')) | lower }}">
+                                <td class="px-3 py-2">
+                                    <div class="text-slate-800">{{ leave.get('name') or '—' }}</div>
+                                    <div class="text-xs text-slate-400 tabular-nums">{{ leave.get('id') or '' }}</div>
+                                </td>
+                                <td class="px-3 py-2 text-slate-600">{{ leave.get('cod_name') or leave.get('cod') or '—'
+                                    }}</td>
+                                <td class="px-3 py-2 text-slate-600 whitespace-nowrap tabular-nums">{{
+                                    leave.get('start_date') or '—' }} a {{ leave.get('end_date') or '—' }}</td>
+                                <td class="px-3 py-2 text-right text-slate-600 tabular-nums">{{ leave.get('duration') or
+                                    '—' }}</td>
+                            </tr>
                             {% endfor %}
-                            {% else %}
-                            <span class="text-slate-400 italic">No payload available</span>
-                            {% endif %}
-                        </div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+                            <tr data-filter-empty class="hidden">
+                                <td colspan="4" class="px-3 py-6 text-center text-slate-400 italic">Nenhum afastamento
+                                    encontrado.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        {% else %}
+        <section>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                Dados do funcionário</h4>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                {% for label, value in task_fields(task) %}
+                <div class="min-w-0">
+                    <dt class="text-xs text-slate-500">{{ label }}</dt>
+                    <dd class="text-sm text-slate-800 [overflow-wrap:anywhere]">{{ value }}</dd>
+                </div>
+                {% else %}
+                <p class="text-sm text-slate-400 italic">Sem dados.</p>
+                {% endfor %}
+            </dl>
+        </section>
+        {% endif %}
+
+        <p class="text-xs text-slate-400">
+            Criada em {{ task.created_at.strftime('%d/%m/%Y %H:%M') }}
+            {% if task.started_at %} · executada em {{ task.started_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+            {% if task.finished_at %} · finalizada em {{ task.finished_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+        </p>
     </div>
 
     <!-- Footer -->
     <div class="px-6 py-3 border-t border-slate-100 bg-slate-50/80 flex justify-between items-center">
-        <button onclick="closeModal()" class="text-xs text-slate-500 hover:text-slate-700 font-medium">
-            Voltar (Esc)
-        </button>
+        <button hx-get="/partials/task-log?task_id={{ task.id }}" hx-target="#modal-content"
+            class="text-xs font-medium text-indigo-600 hover:text-indigo-800">Ver logs da tarefa</button>
+        <button onclick="closeModal()" class="text-xs text-slate-500 hover:text-slate-700 font-medium">Fechar
+            (Esc)</button>
     </div>
 </div>

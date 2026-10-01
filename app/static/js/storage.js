@@ -200,7 +200,55 @@ async function cancelBatch(jobId, taskType, btn) {
 }
 
 // Global exposure
+async function cancelTask(taskId, btn) {
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+
+    try {
+        const response = await fetch(`/api/sync/tasks/${taskId}/cancel`, { method: 'POST' });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Falha ao cancelar tarefa");
+        }
+
+        if (typeof htmx !== 'undefined') {
+            htmx.trigger(document.body, 'refresh');
+        } else {
+            window.location.reload();
+        }
+    } catch (error) {
+        alert(error.message || "Erro ao cancelar tarefa.");
+        console.error(error);
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+}
+
+// Show only the items whose data-search contains the typed text (task and leave lists)
+function filterList(input, selector) {
+    const query = input.value.trim().toLowerCase();
+    const items = input.closest('[data-filter-scope]').querySelectorAll(selector);
+    let shown = 0;
+    items.forEach(item => {
+        const match = !query || item.dataset.search.includes(query);
+        item.classList.toggle('hidden', !match);
+        if (match) shown++;
+    });
+    const scope = input.closest('[data-filter-scope]');
+    const counter = scope.querySelector('[data-filter-count]');
+    if (counter) counter.innerText = query ? `${shown} de ${items.length}` : `${items.length}`;
+    const empty = scope.querySelector('[data-filter-empty]');
+    if (empty) empty.classList.toggle('hidden', shown > 0);
+}
+
 window.startSync = startSync;
 window.executeBatch = executeBatch;
 window.executeTask = executeTask;
 window.cancelBatch = cancelBatch;
+window.cancelTask = cancelTask;
+window.filterList = filterList;

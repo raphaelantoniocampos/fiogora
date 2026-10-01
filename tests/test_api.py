@@ -370,25 +370,32 @@ def test_cancel_batch_tasks(mock_exec_service_class, client):
 @patch("app.infrastructure.web.routes.SyncService")
 def test_get_task_details_partial_single_task(mock_service_class, client):
     mock_service = mock_service_class.return_value
-    task_id = uuid4()
-
-    class MockTask:
-        id = task_id
-        status = "SUCCESS"
-        error_message = None
-        payload = {"key": "value"}
-
-    mock_service.repo.get_task = AsyncMock(return_value=MockTask())
+    task = AutomationTask(
+        job_id=uuid4(),
+        type=AutomationTaskType.UPDATE_EMPLOYEE,
+        status=AutomationTaskStatus.SUCCESS,
+        payload={
+            "id": "004930",
+            "name_expected": "WANDERSON DE JESUS",
+            "cpf": "93388608687",
+            "department_actual": "TRANSPORTE-ZONA RURAL",
+            "department_expected": "SERV.URB-COLETA LIXO",
+        },
+    )
+    mock_service.repo.get_task = AsyncMock(return_value=task)
 
     # Import the dependency override for main.py where get_service is defined and used
     from app.api.endpoints import get_service as api_get_service
 
     app.dependency_overrides[api_get_service] = lambda: mock_service
 
-    response = client.get(f"/partials/task-payload?task_id={task_id}")
+    response = client.get(f"/partials/task-payload?task_id={task.id}")
     assert response.status_code == 200
-    assert "value" in response.text
-    assert "SUCCESS" in response.text
+    assert "Concluída" in response.text
+    assert "O que muda no Ahgora" in response.text
+    assert "TRANSPORTE-ZONA RURAL" in response.text
+    assert "SERV.URB-COLETA LIXO" in response.text
+    assert "933.886.086-87" in response.text
 
     app.dependency_overrides.pop(api_get_service, None)
 
@@ -398,15 +405,14 @@ def test_get_task_details_partial_group_tasks(mock_service_class, client):
     mock_service = mock_service_class.return_value
     job_id = uuid4()
     task_type = AutomationTaskType.ADD_EMPLOYEE
-
-    class MockGroupTask:
-        id = uuid4()
-        type = task_type.name
-        status = AutomationTaskStatus.FAILED
-        error_message = None
-        payload = {"name": "123"}
-
-    mock_service.get_automation_tasks = AsyncMock(return_value=[MockGroupTask()])
+    task = AutomationTask(
+        job_id=job_id,
+        type=task_type,
+        status=AutomationTaskStatus.FAILED,
+        error_message="Botão Salvar não encontrado",
+        payload={"id": "000123", "name": "FULANO", "position": "MOTORISTA"},
+    )
+    mock_service.get_automation_tasks = AsyncMock(return_value=[task])
 
     from app.api.endpoints import get_service as api_get_service
 
@@ -416,8 +422,10 @@ def test_get_task_details_partial_group_tasks(mock_service_class, client):
         f"/partials/task-details-inline?job_id={job_id}&task_type={task_type.name}"
     )  # Use .name not .value for FastAPI query match
     assert response.status_code == 200
-    assert "123" in response.text
-    assert "failed" in response.text.lower()
+    assert "FULANO" in response.text
+    assert "Falhou" in response.text
+    assert "MOTORISTA" in response.text
+    assert "Botão Salvar não encontrado" in response.text
 
     app.dependency_overrides.pop(api_get_service, None)
 

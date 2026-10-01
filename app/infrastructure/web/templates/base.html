@@ -68,6 +68,22 @@
             transform: translateY(-1px);
         }
 
+        /* Tables that turn into stacked cards on phones (rows with .hidden stay hidden) */
+        @media (max-width: 767px) {
+            .stack-table, .stack-table tbody, .stack-table tr, .stack-table td {
+                display: block;
+                width: 100%;
+            }
+
+            .stack-table thead {
+                display: none;
+            }
+
+            .stack-table tr.hidden {
+                display: none;
+            }
+        }
+
         /* Modal overlay */
         .modal-backdrop {
             position: fixed;

@@ -19,6 +19,7 @@ from app.core.settings import settings
 from app.domain.entities import AutomationTask, SyncJob, SyncLog
 from app.domain.enums import SyncStatus
 from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
+from app.infrastructure.web import task_view
 from app.services.credential_crypto import decrypt_password, encrypt_password
 from app.services.sync_service import SyncService
 
@@ -42,6 +43,13 @@ def format_duration(seconds: float) -> str:
 
 
 templates.env.filters["duration"] = format_duration
+templates.env.globals.update(
+    task_status=task_view.task_status,
+    task_name=task_view.task_name,
+    task_changes=task_view.task_changes,
+    task_fields=task_view.task_fields,
+    task_summary=task_view.task_summary,
+)
 
 
 def require_auth(request: Request):
@@ -516,7 +524,7 @@ async def get_task_groups_summary(
     return {"groups": list(groups.values())}
 
 
-@router.get("/partials/task-details-inline")
+@router.get("/partials/task-details-inline", dependencies=[Depends(require_auth)])
 async def get_task_details_inline_partial(
     request: Request,
     job_id: UUID,
@@ -544,7 +552,7 @@ async def get_task_details_inline_partial(
     )
 
 
-@router.get("/partials/task-payload")
+@router.get("/partials/task-payload", dependencies=[Depends(require_auth)])
 async def get_task_details_partial(
     request: Request,
     task_id: Optional[UUID] = None,

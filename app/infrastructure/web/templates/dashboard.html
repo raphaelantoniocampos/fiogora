@@ -79,7 +79,7 @@
                 <h3 class="font-semibold text-slate-800">Histórico Recente</h3>
                 <select id="jobs-owner" name="owner" hx-get="/partials/jobs" hx-target="#jobs-list"
                     hx-trigger="change" aria-label="Filtrar execuções por usuário"
-                    class="text-xs rounded-md border-slate-300 py-1 pl-2 pr-7 text-slate-600 focus:border-indigo-500 focus:ring-indigo-500">
+                    class="text-xs rounded-md border border-slate-300 bg-white py-1 pl-2 pr-7 text-slate-600 focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="mine">Minhas execuções</option>
                     <option value="all">Todas</option>
                     {% for name in usernames %}

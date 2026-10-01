@@ -52,7 +52,7 @@
         </div>
 
         <div class="overflow-x-auto w-full">
-            <table class="min-w-full divide-y divide-slate-200">
+            <table class="stack-table min-w-full divide-y divide-slate-200">
                 <thead class="bg-slate-50">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Tipo</th>
@@ -72,10 +72,10 @@
                         data-running="{{ group.running }}"
                         hx-get="/partials/task-details-inline?job_id={{ job_id }}&task_type={{ group.type }}"
                         hx-target="#tasks-container-{{ loop.index }}" 
-                        hx-trigger="load, refresh, click"
+                        hx-trigger="load, refresh from:body, click"
                         hx-swap="innerHTML"
                         onclick="document.getElementById('accordion-{{ loop.index }}').classList.toggle('hidden'); document.getElementById('icon-{{ loop.index }}').classList.toggle('rotate-90');">
-                        <td class="px-6 py-4 whitespace-nowrap">
+                        <td class="px-4 pt-4 pb-2 md:px-6 md:py-4 whitespace-nowrap">
                             <div class="flex items-center gap-3">
                             <svg class="w-4 h-4 text-slate-400 transform transition-transform duration-200"
                                 id="icon-{{ loop.index }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,7 +88,7 @@
                                 task_labels.get(type_str, type_str) }}</span>
                             </div>
                         </td>
-                        <td class="px-6 py-4">
+                        <td class="px-4 py-1 md:px-6 md:py-4">
                             <div
                                 class="w-full bg-slate-100/80 shadow-inner rounded-full h-3 mb-1 flex overflow-hidden ring-1 ring-slate-200"
                                 id="progress-bar-{{ group_id_str }}">
@@ -107,8 +107,8 @@
                             <p class="text-[11px] text-slate-500 progress-caption">{{ group.success }} de {{ group.total }}
                                 {{ 'concluída' if group.total == 1 else 'concluídas' }}</p>
                         </td>
-                        <td class="px-6 py-4 text-center" onclick="event.stopPropagation()">
-                            <div class="flex flex-wrap justify-center gap-1.5 text-xs font-medium" id="metrics-{{ group_id_str }}">
+                        <td class="px-4 py-2 md:px-6 md:py-4 md:text-center" onclick="event.stopPropagation()">
+                            <div class="flex flex-wrap justify-start md:justify-center gap-1.5 text-xs font-medium" id="metrics-{{ group_id_str }}">
                                 {% for key, singular, plural, color in [
                                 ('success', 'concluída', 'concluídas', 'text-emerald-700 bg-emerald-50'),
                                 ('running', 'em execução', 'em execução', 'text-blue-700 bg-blue-50'),
@@ -123,8 +123,8 @@
                                 {% endfor %}
                             </div>
                         </td>
-                        <td class="px-6 py-4 text-right whitespace-nowrap" onclick="event.stopPropagation()">
-                            <div class="flex justify-end items-center space-x-1">
+                        <td class="px-4 pt-1 pb-4 md:px-6 md:py-4 md:text-right whitespace-nowrap" onclick="event.stopPropagation()">
+                            <div class="flex justify-start md:justify-end items-center space-x-1 -ml-1 md:ml-0">
                                 {% if group.pending > 0 or group.failed > 0 or group.cancelled > 0 %}
                                 <button
                                     onclick="event.stopPropagation(); window.executeBatch('{{ job_id }}', '{{ group.type.value if group.type.value is defined else group.type }}', this)"
@@ -175,7 +175,7 @@
                     <tr id="accordion-{{ loop.index }}"
                         class="hidden bg-slate-50/30 border-b border-t border-slate-100 shadow-inner">
                         <td colspan="4" class="p-0">
-                            <div id="tasks-container-{{ loop.index }}" class="py-4 px-8 border-l-4 border-l-indigo-300">
+                            <div id="tasks-container-{{ loop.index }}" class="p-3 md:py-4 md:px-8 border-l-4 border-l-indigo-300">
                                 <!-- HTMX will load task_details_inline_partial.html here -->
                                 <div class="flex justify-center items-center py-8">
                                     <svg class="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg"
