@@ -110,6 +110,31 @@ Requisitos no servidor: o projeto clonado com `git` na branch `main`, `.env` con
 - **Log**: `~/.local/state/fiogora-deploy/deploy.log` (inclui os deploys manuais)
 - **Desativar o automático**: `crontab -l | grep -v auto-deploy.sh | crontab -`
 
+### 5. Backup do banco
+
+[`deploy/backup-db.sh`](deploy/backup-db.sh) gera um `pg_dump` compactado em `~/backups/fiogora/` (arquivos legíveis só pelo dono: contêm hashes de senha e credenciais criptografadas). Roda todo dia às 03:00 e também antes de cada deploy automático (as migrações rodam na inicialização do container). Backups com mais de 14 dias são apagados, sempre depois de um backup novo ter dado certo.
+
+**Instalação** (no servidor, dentro da pasta do projeto):
+
+```bash
+(crontab -l 2>/dev/null | grep -v backup-db.sh; echo "0 3 * * * $PWD/deploy/backup-db.sh daily >> $HOME/backups/fiogora/backup.log 2>&1") | crontab -
+```
+
+| Comando | O que faz |
+|---|---|
+| `deploy/backup-db.sh` | Faz um backup agora |
+| `deploy/verify-backup.sh` | Restaura o backup mais recente num container descartável e compara a contagem de linhas com o banco em uso (não mexe no banco real) |
+
+**Restaurar** (substitui os dados atuais; faça um backup antes):
+
+```bash
+docker compose stop api
+docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < ~/backups/fiogora/ARQUIVO.dump
+docker compose start api
+```
+
+Os backups ficam no mesmo disco do servidor: protegem contra erros e migrações problemáticas, mas não contra a perda do disco. Para isso, copie `~/backups/fiogora/` periodicamente para outra máquina.
+
 ---
 
 ## 📂 Estrutura do Projeto

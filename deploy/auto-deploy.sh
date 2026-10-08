@@ -136,6 +136,8 @@ main() {
 
     log "Deploying $short: $(git log -1 --format=%s "$target")"
     git merge -q --ff-only "origin/$BRANCH"
+    # Migrations run when the container starts: keep a backup from right before them
+    "$REPO_DIR/deploy/backup-db.sh" pre-deploy || log "Pre-deploy backup failed, deploying anyway"
     if [ "$FORCE" = 1 ]; then
         docker compose up -d --build --force-recreate
     else
