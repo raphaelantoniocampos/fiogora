@@ -1,7 +1,8 @@
 """How automation tasks are shown in the web UI: status, name, changes and fields of their payload."""
 
-from typing import Any
+from typing import Any, Optional
 
+from app.core.settings import settings
 from app.domain.entities import AutomationTask
 from app.domain.enums import AutomationTaskStatus, AutomationTaskType
 
@@ -74,7 +75,31 @@ def task_changes(task: AutomationTask) -> list[dict[str, Any]]:
             f"{field}_actual_norm", before
         ):
             changes.append({"label": label, "before": before or "—", "after": after})
+    location = _location_change(payload)
+    if location:
+        changes.append(location)
     return changes
+
+
+def _location_change(payload: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Location set from the department mapping (sync_service adds location_expected and
+    location_actual when "Atualização de Localização" is on); follows AhgoraBrowser.update_employee."""
+    expected = payload.get("location_expected")
+    actual = payload.get("location_actual") or []
+    if not isinstance(expected, list) or not expected or expected == actual:
+        return None
+    if str(payload.get("id", "")).zfill(6) in settings.IGNORE_LOCATION_CHANGE_IDS:
+        return None
+    change = {
+        "label": "Localização",
+        "before": ", ".join(actual) or "—",
+        "after": ", ".join(expected),
+    }
+    if not settings.UPDATE_LOCATIONS:
+        change["note"] = (
+            "não será aplicada: a Atualização de Localização está desligada"
+        )
+    return change
 
 
 def task_fields(task: AutomationTask) -> list[tuple[str, str]]:
@@ -82,7 +107,9 @@ def task_fields(task: AutomationTask) -> list[tuple[str, str]]:
     payload = task.payload
     fields = []
     for key, label in EMPLOYEE_FIELDS:
-        value = payload.get(f"{key}_expected", payload.get(key))
+        value = payload.get(
+            key if key == "location" else f"{key}_expected", payload.get(key)
+        )
         if value in (None, ""):
             continue
         fields.append((label, _format_field(key, value)))

@@ -6,6 +6,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_BASE_DIR = Path(__file__).resolve().parent.parent.parent
+_IS_DOCKER = os.getenv("IS_DOCKER", "False").lower() == "true"
+# Where the settings switches of the web UI are saved. In Docker the project .env is not in
+# the container (the values come from env_file), so they go to the data volume and are
+# loaded over the environment; otherwise every restart would undo what was set in the UI.
+_RUNTIME_ENV_PATH = (
+    _BASE_DIR / "data" / "runtime.env" if _IS_DOCKER else _BASE_DIR / ".env"
+)
+if _IS_DOCKER:
+    load_dotenv(_RUNTIME_ENV_PATH, override=True)
+
 
 class Settings:
     # Base
@@ -13,7 +24,8 @@ class Settings:
     VERSION: str = "1.0.0"
 
     # Paths
-    BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
+    BASE_DIR: Path = _BASE_DIR
+    RUNTIME_ENV_PATH: Path = _RUNTIME_ENV_PATH
     DATA_DIR: Path = BASE_DIR / "data"
     DOWNLOADS_DIR: Path = BASE_DIR / "downloads"
     CORE_DIR_PATH: Path = Path(__file__).resolve().parent
@@ -22,7 +34,7 @@ class Settings:
     CONSTANTS_JSON_PATH: Path = MAPPINGS_DIR / "constants.json"
 
     # Browser / Automation
-    IS_DOCKER: bool = os.getenv("IS_DOCKER", "False").lower() == "true"
+    IS_DOCKER: bool = _IS_DOCKER
     HEADLESS_MODE: bool = (
         True if IS_DOCKER else os.getenv("HEADLESS_MODE", "True").lower() == "true"
     )

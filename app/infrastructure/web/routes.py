@@ -344,7 +344,7 @@ async def toggle_headless(request: Request, target: str = Form(...)):
     if settings.IS_DOCKER:
         return {"error": "Ação não permitida em produção"}
 
-    env_path = str(settings.BASE_DIR / ".env")
+    env_path = str(settings.RUNTIME_ENV_PATH)
 
     if target == "sync":
         settings.HEADLESS_MODE = not settings.HEADLESS_MODE
@@ -371,7 +371,7 @@ async def toggle_headless(request: Request, target: str = Form(...)):
 
 @router.post("/api/settings/toggle-cached", dependencies=[Depends(require_auth)])
 async def toggle_cached_files(request: Request):
-    env_path = str(settings.BASE_DIR / ".env")
+    env_path = str(settings.RUNTIME_ENV_PATH)
     settings.USE_CACHED_FILES = not settings.USE_CACHED_FILES
     dotenv.set_key(env_path, "USE_CACHED_FILES", str(settings.USE_CACHED_FILES))
 
@@ -389,7 +389,7 @@ async def toggle_cached_files(request: Request):
 
 @router.post("/api/settings/toggle-locations", dependencies=[Depends(require_auth)])
 async def toggle_location_updates(request: Request):
-    env_path = str(settings.BASE_DIR / ".env")
+    env_path = str(settings.RUNTIME_ENV_PATH)
     settings.UPDATE_LOCATIONS = not settings.UPDATE_LOCATIONS
     dotenv.set_key(env_path, "UPDATE_LOCATIONS", str(settings.UPDATE_LOCATIONS))
 

@@ -19,5 +19,6 @@ downloads/
 data/*.csv
 data/*.txt
 data/*.json
+data/runtime.env
 tasks/
 docs/*

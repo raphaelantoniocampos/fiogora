@@ -413,16 +413,27 @@ class AhgoraBrowser(BaseBrowser):
                         f"Departamento alterado: {payload.get('department_actual')} → {department_value}"
                     )
 
-            if payload.get("department_expected") and settings.UPDATE_LOCATIONS:
+            if (
+                payload.get("department_expected")
+                and settings.UPDATE_LOCATIONS
+                and employee_id.zfill(6) not in settings.IGNORE_LOCATION_CHANGE_IDS
+            ):
                 try:
                     loc_changed = self._update_location_multiselect(
                         payload["department_expected"]
                     )
                     if loc_changed:
                         has_changes = True
-                        change_logs.append(
-                            f"Localização ajustada conforme o departamento: {payload.get('department_expected')}"
-                        )
+                        expected_locations = payload.get("location_expected")
+                        if expected_locations:
+                            change_logs.append(
+                                "Localização alterada: "
+                                f"{', '.join(payload.get('location_actual') or []) or '—'} → {', '.join(expected_locations)}"
+                            )
+                        else:
+                            change_logs.append(
+                                f"Localização ajustada conforme o departamento: {payload.get('department_expected')}"
+                            )
                 except Exception as e:
                     self._log(
                         "WARNING",

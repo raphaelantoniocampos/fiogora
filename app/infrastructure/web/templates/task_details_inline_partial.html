@@ -40,6 +40,7 @@
                         <span class="text-slate-400 line-through">{{ change.before }}</span>
                         <span class="text-slate-400" aria-hidden="true">→</span>
                         <span class="text-slate-800 font-medium">{{ change.after }}</span>
+                        {% if change.note %}<span class="text-slate-500 italic">({{ change.note }})</span>{% endif %}
                     </span>
                     {% endfor %}
                 </div>

@@ -42,6 +42,8 @@ Crie um arquivo `.env` a partir do exemplo (`cp .env.example .env`) e preencha a
 | `ADMIN_PASSWORD`    | Senha do Administrador para o painel             | `changeme123` |
 | `SECRET_KEY`        | Chave criptográfica para tokens (JWT)              | `b39dc...` |
 
+As opções alteradas pela tela de Configurações (usar cache, atualização de localização) são gravadas no `.env` do projeto. No Docker, onde o `.env` não fica dentro do container, elas vão para `data/runtime.env` (volume persistente) e têm prioridade sobre o `.env`, para não se perderem a cada reinício ou deploy.
+
 **2. Configuração no Fiorilli:**
 
 Configure as colunas da tabela no painel *Fiorilli 2.1 - Cadastro de Trabalhadores* e defina como padrão para seu usuário:
