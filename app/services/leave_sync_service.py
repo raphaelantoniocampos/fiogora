@@ -41,25 +41,28 @@ class LeaveSyncService:
         ahgora_password: Optional[str] = None,
         ahgora_company: Optional[str] = None,
         ahgora_url: Optional[str] = None,
+        task_id: Optional[UUID] = None,
+        include_cancelled: bool = False,
     ) -> None:
         """
-        Executes all pending ADD_LEAVE tasks as a single batch using the Ahgora file importer.
+        Executes the pending (or failed) ADD_LEAVE task of the job as a single batch using the
+        Ahgora file importer. A cancelled task is left out of batch runs; it only runs when asked
+        for explicitly (`include_cancelled`, optionally a specific `task_id`).
         """
         logger.info(f"Starting batched leaf upload for job {job_id}")
 
         # 1. Fetch pending batch task
+        runnable = [AutomationTaskStatus.PENDING, AutomationTaskStatus.FAILED]
+        if include_cancelled:
+            runnable.append(AutomationTaskStatus.CANCELLED)
         tasks = await self.repo.get_automation_tasks_by_job(job_id)
         batch_task = next(
             (
                 t
                 for t in tasks
                 if str(t.type).upper().endswith("ADD_LEAVE")
-                and t.status
-                in [
-                    AutomationTaskStatus.PENDING,
-                    AutomationTaskStatus.FAILED,
-                    AutomationTaskStatus.CANCELLED,
-                ]
+                and t.status in runnable
+                and (task_id is None or t.id == task_id)
             ),
             None,
         )

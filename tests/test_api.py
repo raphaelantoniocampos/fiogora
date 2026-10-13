@@ -367,6 +367,49 @@ def test_cancel_batch_tasks(mock_exec_service_class, client):
     app.dependency_overrides.pop(get_execution_service, None)
 
 
+@patch("app.api.endpoints.TaskExecutionService")
+def test_cancel_selected_tasks(mock_exec_service_class, client):
+    mock_exec_service = mock_exec_service_class.return_value
+    mock_exec_service.cancel_selected = AsyncMock(return_value=2)
+    task_ids = [uuid4(), uuid4()]
+
+    app.dependency_overrides[get_execution_service] = lambda: mock_exec_service
+
+    # Must not be read as /tasks/{task_id}/cancel with task_id="selected"
+    response = client.post(
+        "/api/sync/tasks/selected/cancel",
+        json={"task_ids": [str(task_id) for task_id in task_ids]},
+    )
+    assert response.status_code == 200, response.json()
+    assert "2 tarefa(s) cancelada(s)" in response.json()["message"]
+    mock_exec_service.cancel_selected.assert_called_once_with(task_ids)
+
+    app.dependency_overrides.pop(get_execution_service, None)
+
+
+@patch("app.api.endpoints.TaskExecutionService")
+def test_execute_selected_tasks(mock_exec_service_class, client):
+    mock_exec_service = mock_exec_service_class.return_value
+    _mock_user_with_credentials(mock_exec_service.repo)
+    mock_exec_service.execute_selected = AsyncMock()
+    task_ids = [uuid4(), uuid4()]
+
+    app.dependency_overrides[get_execution_service] = lambda: mock_exec_service
+
+    response = client.post(
+        "/api/sync/tasks/selected/execute",
+        json={"task_ids": [str(task_id) for task_id in task_ids]},
+    )
+    assert response.status_code == 200, response.json()
+    # Ran in the background with the logged-in user's credentials
+    args, kwargs = mock_exec_service.execute_selected.call_args
+    assert args[0] == task_ids
+    assert kwargs["ahgora_user"] == "auser"
+    assert kwargs["fiorilli_user"] == "fuser"
+
+    app.dependency_overrides.pop(get_execution_service, None)
+
+
 @patch("app.infrastructure.web.routes.SyncService")
 def test_get_task_details_partial_single_task(mock_service_class, client):
     mock_service = mock_service_class.return_value

@@ -7,7 +7,6 @@ class SyncStatus(StrEnum):
     SUCCESS = auto()
     FAILED = auto()
     CANCELLED = auto()
-    RETRYING = auto()
 
 
 class AutomationTaskType(StrEnum):

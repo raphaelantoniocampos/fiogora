@@ -49,6 +49,23 @@ class TaskExecutionService:
             logger.warning(f"Task {task_id} is already completed or running.")
             return False
 
+        if task.type == TaskType.ADD_LEAVE:
+            # Leaves are imported as one file. Asking for this task explicitly runs it even
+            # if it was cancelled (batch runs skip cancelled tasks).
+            from app.services.leave_sync_service import LeaveSyncService
+
+            await LeaveSyncService(self.repo).execute_leaves_batch(
+                task.job_id,
+                ahgora_user=ahgora_user,
+                ahgora_password=ahgora_password,
+                ahgora_company=ahgora_company,
+                ahgora_url=ahgora_url,
+                task_id=task_id,
+                include_cancelled=True,
+            )
+            refreshed = await self.repo.get_task(task_id)
+            return bool(refreshed and refreshed.status == TaskStatus.SUCCESS)
+
         await self.repo.update_task_status(task_id, TaskStatus.RUNNING)
         await self.repo.add_log(
             task.job_id,
@@ -135,7 +152,8 @@ class TaskExecutionService:
         ahgora_password: Optional[str] = None,
     ) -> None:
         """
-        Executes all pending, failed or cancelled tasks of a certain type for a given job.
+        Executes all pending or failed tasks of a certain type for a given job. Cancelled tasks
+        are left out: cancelling is how a task is excluded from batch runs.
         Runs sequentially to respect browser limitations.
         """
         from app.domain.enums import AutomationTaskStatus
@@ -174,7 +192,6 @@ class TaskExecutionService:
             in [
                 AutomationTaskStatus.PENDING,
                 AutomationTaskStatus.FAILED,
-                AutomationTaskStatus.CANCELLED,
             ]
         ]
 
@@ -205,7 +222,7 @@ class TaskExecutionService:
         ahgora_password: Optional[str] = None,
     ) -> None:
         """
-        Executes all pending, failed or cancelled tasks for a given job.
+        Executes all pending or failed tasks for a given job (cancelled ones are skipped).
         Runs them one by one sequentially.
         """
         logger.info(f"Starting execution of all tasks for job {job_id}")
@@ -255,6 +272,55 @@ class TaskExecutionService:
                 )
 
         await self.repo.evaluate_and_update_job_status(job_id)
+
+    async def execute_selected(
+        self,
+        task_ids: list[UUID],
+        fiorilli_url: Optional[str] = None,
+        fiorilli_user: Optional[str] = None,
+        fiorilli_password: Optional[str] = None,
+        ahgora_url: Optional[str] = None,
+        ahgora_user: Optional[str] = None,
+        ahgora_company: Optional[str] = None,
+        ahgora_password: Optional[str] = None,
+    ) -> None:
+        """
+        Executes the given tasks one by one. The selection is explicit, so cancelled tasks
+        run too; completed or running ones are skipped.
+        """
+        logger.info(f"Starting execution of {len(task_ids)} selected tasks")
+        job_ids: list[UUID] = []
+        for task_id in task_ids:
+            task = await self.repo.get_task(task_id)
+            if not task or task.status in [TaskStatus.SUCCESS, TaskStatus.RUNNING]:
+                continue
+            if task.job_id not in job_ids:
+                job_ids.append(task.job_id)
+                await self.repo.update_job_status(
+                    job_id=task.job_id, status=JobStatus.RUNNING
+                )
+            await self.execute_task(
+                task_id,
+                fiorilli_url=fiorilli_url,
+                fiorilli_user=fiorilli_user,
+                fiorilli_password=fiorilli_password,
+                ahgora_url=ahgora_url,
+                ahgora_user=ahgora_user,
+                ahgora_company=ahgora_company,
+                ahgora_password=ahgora_password,
+                evaluate_job=False,
+            )
+
+        for job_id in job_ids:
+            await self.repo.evaluate_and_update_job_status(job_id)
+
+    async def cancel_selected(self, task_ids: list[UUID]) -> int:
+        """Cancels the given tasks; returns how many were cancelled."""
+        cancelled = 0
+        for task_id in task_ids:
+            if await self.cancel_task(task_id):
+                cancelled += 1
+        return cancelled
 
     async def cancel_task(self, task_id: UUID) -> bool:
         """

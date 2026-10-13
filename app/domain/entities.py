@@ -17,8 +17,6 @@ class SyncJob:
     finished_at: Optional[datetime] = None
     error_message: Optional[str] = None
     metadata_info: Dict[str, Any] = field(default_factory=dict)
-    retry_count: int = 0
-    next_retry_at: Optional[datetime] = None
 
 
 @dataclass
@@ -51,7 +49,6 @@ class AutomationTask:
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     error_message: Optional[str] = None
-    retry_count: int = 0
 
     def describe(self) -> str:
         """Readable label for logs, e.g. "Atualizar funcionário: FULANO DE TAL (123)"."""

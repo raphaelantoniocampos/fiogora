@@ -2,16 +2,35 @@
 {% set type_label = tasks[0].type.label if tasks else task_type %}
 <div class="bg-white rounded-lg border border-slate-200 overflow-hidden" data-filter-scope>
     <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50">
-        <h4 class="text-sm font-semibold text-slate-800">
-            {{ type_label }}
-            <span class="ml-1 font-normal text-slate-400"><span data-filter-count>{{ tasks | length }}</span>
-                {{ 'tarefa' if tasks | length == 1 else 'tarefas' }}</span>
-        </h4>
+        <label class="flex items-center gap-3 text-sm font-semibold text-slate-800 cursor-pointer">
+            <input type="checkbox" data-select-all onchange="toggleAllTasks(this)"
+                title="Selecionar todas as tarefas listadas" aria-label="Selecionar todas as tarefas listadas"
+                class="h-4 w-4 accent-indigo-600 cursor-pointer">
+            <span>{{ type_label }}
+                <span class="ml-1 font-normal text-slate-400"><span data-filter-count>{{ tasks | length }}</span>
+                    {{ 'tarefa' if tasks | length == 1 else 'tarefas' }}</span></span>
+        </label>
         {% if tasks | length > 5 %}
         <input type="search" placeholder="Buscar por nome ou matrícula" aria-label="Buscar tarefa"
             oninput="filterList(this, '[data-task]')"
             class="w-full sm:w-64 rounded-md border border-slate-300 py-1.5 px-3 text-sm focus:border-indigo-500 focus:ring-indigo-500">
         {% endif %}
+    </div>
+
+    <!-- Actions on the selected tasks (shown once something is selected) -->
+    <div data-selection-bar
+        class="hidden flex flex-wrap items-center gap-2 px-4 py-2 border-b border-indigo-100 bg-indigo-50/60 text-sm">
+        <span data-selection-count class="font-medium text-indigo-900 mr-1"></span>
+        <button type="button" onclick="runOnSelectedTasks(this, 'execute')"
+            title="Executa as selecionadas, inclusive as canceladas"
+            class="text-emerald-700 bg-white ring-1 ring-inset ring-emerald-200 hover:bg-emerald-50 px-3 py-1 rounded-full text-xs font-semibold transition-all">Executar
+            selecionadas</button>
+        <button type="button" onclick="runOnSelectedTasks(this, 'cancel')"
+            title="Cancela as selecionadas: elas ficam de fora da execução em lote"
+            class="text-rose-700 bg-white ring-1 ring-inset ring-rose-200 hover:bg-rose-50 px-3 py-1 rounded-full text-xs font-semibold transition-all">Cancelar
+            selecionadas</button>
+        <button type="button" onclick="clearTaskSelection(this)"
+            class="ml-auto text-xs text-slate-500 hover:text-slate-700 font-medium">Limpar seleção</button>
     </div>
 
     <ul class="divide-y divide-slate-100 max-h-[520px] overflow-y-auto">
@@ -20,7 +39,12 @@
         {% set changes = task_changes(task) %}
         {% set employee_id = task.payload.get('id') %}
         <li data-task data-search="{{ (task_name(task) ~ ' ' ~ (employee_id or '')) | lower }}"
-            class="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-slate-50/70 transition-colors">
+            class="flex items-start sm:items-center gap-3 px-4 py-3 hover:bg-slate-50/70 transition-colors">
+            <input type="checkbox" data-task-check value="{{ task.id }}" onchange="updateTaskSelection(this)"
+                aria-label="Selecionar {{ task_name(task) }}" {% if task.status == 'success' %}disabled
+                title="Tarefa já concluída" {% endif %}
+                class="mt-1 sm:mt-0 h-4 w-4 shrink-0 accent-indigo-600 {{ 'opacity-30' if task.status == 'success' else 'cursor-pointer' }}">
+            <div class="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center gap-3">
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span
@@ -55,7 +79,7 @@
             </div>
 
             <div class="flex items-center gap-1 shrink-0 -ml-2 sm:ml-0">
-                {% if task.status not in ['success', 'running'] and task.type != 'add_leave' %}
+                {% if task.status not in ['success', 'running'] %}
                 <button onclick="executeTask('{{ task.id }}', this)"
                     class="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 pl-2 pr-3 py-1.5 rounded-full transition-all flex items-center gap-1.5"
                     title="Executar esta tarefa no Ahgora">
@@ -103,6 +127,7 @@
                             d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
                     </svg>
                 </button>
+            </div>
             </div>
         </li>
         {% else %}

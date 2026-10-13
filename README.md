@@ -15,7 +15,6 @@
 - **Arquitetura Assíncrona**: Gerenciamento de tarefas em segundo plano usando FastAPI Lifespan e agendadores.
 - **Docker-First**: Ambiente totalmente em contêineres para implantação consistente.
 - **Gerenciamento de Tarefas**: API REST para monitorar, listar e revisar logs detalhados de cada tarefa de sincronização.
-- **Sistema de Repetição de Tarefas (Retry)**: Agendador integrado para lidar com falhas de automação transitórias.
 - **Logs Detalhados**: Logs de execução granulares disponíveis via API REST.
 
 ---
@@ -145,7 +144,7 @@ Os backups ficam no mesmo disco do servidor: protegem contra erros e migrações
 fiogora/
 ├── app/
 │   ├── api/            # REST API Layer
-│   ├── core/           # Config, DB, and Scheduler logic
+│   ├── core/           # Config, DB, and logging
 │   ├── domain/         # Business entities and schemas
 │   ├── infrastructure/ # RPA (Selenium) and Repositories
 │   ├── services/       # Core business logic

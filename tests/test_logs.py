@@ -25,7 +25,7 @@ from app.infrastructure.web.routes import (
     group_logs_chronologically,
 )
 from app.main import app
-from app.services.sync_service import SyncService
+from app.services.sync_service import SyncService, _is_auth_error
 
 
 @pytest.fixture
@@ -76,7 +76,6 @@ async def test_get_job_includes_owner():
         triggered_by="api",
         user_id=user_id,
         metadata_info={},
-        retry_count=0,
     )
     session = MagicMock()
     session.get = AsyncMock(return_value=db_job)
@@ -148,41 +147,21 @@ async def test_sync_run_binds_the_job_owner():
     assert seen and set(seen) == {"ana"}
 
 
-# --- retries never repeat a wrong password ------------------------------------------
+# --- wrong passwords are not tried again within a sync ------------------------------
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "error",
+    "error, is_auth",
     [
-        "Usuário ou senha Ahgora inválido",
-        "Usuário ou senha Fiorilli inválido",
-        "Credenciais do Ahgora não configuradas (usuário, senha e empresa)",
+        ("Usuário ou senha Ahgora inválido", True),
+        ("Usuário ou senha Fiorilli inválido", True),
+        ("Credenciais do Ahgora não configuradas (usuário, senha e empresa)", True),
+        ("Timeout na página", False),
+        (None, False),
     ],
 )
-async def test_auth_errors_fail_without_retry(error):
-    job = SyncJob(id=uuid4(), retry_count=0)
-    repo = MagicMock()
-    repo.update_job_status = AsyncMock()
-    repo.increment_job_retry = AsyncMock()
-    repo.add_log = AsyncMock()
-
-    await SyncService(repo=repo)._handle_job_retry(job, error_msg=error)
-
-    repo.increment_job_retry.assert_not_called()
-    repo.update_job_status.assert_called_once_with(job.id, SyncStatus.FAILED, error)
-
-
-@pytest.mark.asyncio
-async def test_other_errors_are_retried():
-    job = SyncJob(id=uuid4(), retry_count=0)
-    repo = MagicMock()
-    repo.increment_job_retry = AsyncMock()
-    repo.add_log = AsyncMock()
-
-    await SyncService(repo=repo)._handle_job_retry(job, error_msg="Timeout na página")
-
-    repo.increment_job_retry.assert_called_once()
+def test_auth_errors_are_recognized(error, is_auth):
+    assert _is_auth_error(error) is is_auth
 
 
 # --- viewer ---------------------------------------------------------------------------

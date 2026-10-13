@@ -2,7 +2,7 @@ import asyncio
 import logging
 import re
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
@@ -40,7 +40,7 @@ DATA_DIR = settings.DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-# Errors that retrying cannot fix: wrong password ("Usuário ou senha ... inválido") or
+# Errors that trying again cannot fix: wrong password ("Usuário ou senha ... inválido") or
 # missing credentials ("Credenciais do ... não configuradas")
 AUTH_ERROR_MARKERS = ("inválido", "invalido", "credenciais do", "credenciais não")
 
@@ -50,8 +50,6 @@ def _is_auth_error(message: Optional[str]) -> bool:
 
 
 class SyncService:
-    MAX_JOB_RETRIES = 3
-
     def __init__(self, repo: SqlAlchemyRepo):
         self.repo = repo
         self._db_lock = asyncio.Lock()
@@ -129,7 +127,7 @@ class SyncService:
             logger.error(f"Job {job_id} not found for execution")
             return
 
-        # Also reached by the retry scheduler, so take the user from the job itself
+        # Runs in the background, outside the request: take the user from the job itself
         usernames = await self.repo.get_usernames() if job.user_id else {}
         with log_context(username=usernames.get(job.user_id), job_id=job_id):
             await self._run_sync_job(
@@ -191,16 +189,15 @@ class SyncService:
                     "Sincronização concluída com sucesso",
                 )
             else:
-                # If it failed, check if we should retry (job level)
-                await self._handle_job_retry(job, error_msg=result.message)
+                await self._fail_job(job, result.message)
 
         except TimeoutError:
             error_msg = f"Tempo limite de {SYNC_TIMEOUT_MAX} minutos excedido"
             logger.error(f"Job {job_id} timed out")
             try:
-                await self._handle_job_retry(job, error_msg=error_msg)
+                await self._fail_job(job, error_msg)
             except Exception as e:
-                logger.error(f"Failed to handle retry for timed out job {job_id}: {e}")
+                logger.error(f"Failed to mark timed out job {job_id} as failed: {e}")
 
         except asyncio.CancelledError:
             logger.info(f"Job {job_id} was cancelled")
@@ -217,7 +214,7 @@ class SyncService:
         except Exception as e:
             logger.exception(f"Unhandled error in job {job_id}")
             try:
-                # Rollback any pending failed transaction to allow retry update
+                # Rollback any pending failed transaction so the status can be updated
                 if hasattr(self.repo, "session"):
                     await self.repo.session.rollback()
             except Exception as rollback_e:
@@ -225,41 +222,18 @@ class SyncService:
 
             # Ensure status is UPDATED even if something very bad happens
             try:
-                # Handle retry even for unhandled errors
-                await self._handle_job_retry(job, error_msg=str(e))
+                await self._fail_job(job, str(e))
             except Exception as inner_e:
-                logger.error(f"Failed to handle retry for job {job_id}: {inner_e}")
+                logger.error(f"Failed to mark job {job_id} as failed: {inner_e}")
         finally:
             task_registry.unregister(job_id)
 
-    async def _handle_job_retry(self, job: SyncJob, error_msg: Optional[str] = None):
-        """Calculates next retry and updates job if retries are available."""
-        if job.retry_count >= self.MAX_JOB_RETRIES or _is_auth_error(error_msg):
-            final_msg = error_msg or "Número máximo de tentativas atingido"
-            async with self._db_lock:
-                await self.repo.update_job_status(job.id, SyncStatus.FAILED, final_msg)
-            await self._log(
-                job.id, "ERROR", f"Sincronização falhou definitivamente: {final_msg}"
-            )
-            return
-
-        # Exponential backoff: 5m, 30m, 1h
-        backoffs = [
-            timedelta(minutes=5),
-            timedelta(minutes=30),
-            timedelta(hours=1),
-        ]
-
-        delay = backoffs[job.retry_count]  # current retry_count is 0..2
-        next_retry = datetime.now() + delay
-
+    async def _fail_job(self, job: SyncJob, error_msg: Optional[str] = None):
+        """Marks the sync as failed; a new one has to be started by the user."""
+        message = error_msg or "Falha na sincronização"
         async with self._db_lock:
-            await self.repo.increment_job_retry(job.id, next_retry)
-        await self._log(
-            job.id,
-            "WARNING",
-            f"Sincronização falhou. Nova tentativa ({job.retry_count + 1}/{self.MAX_JOB_RETRIES}) agendada para {next_retry:%d/%m/%Y %H:%M}",
-        )
+            await self.repo.update_job_status(job.id, SyncStatus.FAILED, message)
+        await self._log(job.id, "ERROR", f"Sincronização falhou: {message}")
 
     async def kill_job(self, job_id: UUID) -> bool:
         """Cancels a running job and updates its status to CANCELLED."""
@@ -272,10 +246,7 @@ class SyncService:
             logger.warning(f"Kill failed: Job {job_id} not found in database")
             return False
 
-        is_zombie = task is None and job.status in (
-            SyncStatus.RUNNING,
-            SyncStatus.RETRYING,
-        )
+        is_zombie = task is None and job.status == SyncStatus.RUNNING
 
         if not task and not is_zombie:
             active_tasks = task_registry.get_all_tasks()
@@ -326,11 +297,10 @@ class SyncService:
         jobs = await self.repo.list_jobs()
         for job in jobs:
             if (
-                job.status
-                in (SyncStatus.RUNNING, SyncStatus.RETRYING, SyncStatus.PENDING)
+                job.status in (SyncStatus.RUNNING, SyncStatus.PENDING)
             ) and job.id not in registry_job_ids:
                 logger.info(
-                    f"Cleaning up untracked RUNNING/RETRYING job {job.id} from database"
+                    f"Cleaning up untracked RUNNING/PENDING job {job.id} from database"
                 )
                 if await self.kill_job(job.id):
                     count += 1

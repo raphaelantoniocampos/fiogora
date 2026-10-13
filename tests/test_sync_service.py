@@ -55,102 +55,37 @@ async def test_run_sync_background_success():
 
 
 @pytest.mark.asyncio
-async def test_run_sync_background_failure_permanent():
-    repo = MagicMock()
-    job_id = uuid4()
-    # Set retry_count to 3 to force final failure
-    job = SyncJob(id=job_id, retry_count=3)
-    repo.get_job = AsyncMock(return_value=job)
-    repo.update_job_status = AsyncMock()
-    repo.add_log = AsyncMock()
-
-    service = SyncService(repo=repo)
-
-    with patch.object(
-        service,
-        "_execute_sync_logic",
-        new_callable=AsyncMock,
-        side_effect=Exception("Browser Error"),
-    ):
-        await service.run_sync_background(
-            job_id,
-            "http://fiorilli",
-            "user1",
-            "pass1",
-            "http://ahgora",
-            "user2",
-            "company",
-            "pass2",
-        )
-
-    repo.update_job_status.assert_any_call(job_id, SyncStatus.FAILED, "Browser Error")
-
-
-@pytest.mark.asyncio
-async def test_run_sync_background_retry_scheduled():
-    repo = MagicMock()
-    job_id = uuid4()
-    # Fresh job, retry_count=0
-    job = SyncJob(id=job_id, retry_count=0)
-    repo.get_job = AsyncMock(return_value=job)
-    repo.update_job_status = AsyncMock()
-    repo.increment_job_retry = AsyncMock()
-    repo.add_log = AsyncMock()
-
-    service = SyncService(repo=repo)
-
-    with patch.object(
-        service,
-        "_execute_sync_logic",
-        new_callable=AsyncMock,
-        return_value=SyncResult(
-            success=False, status=SyncStatus.FAILED, message="Transient Error"
+@pytest.mark.parametrize(
+    "outcome, message",
+    [
+        (Exception("Browser Error"), "Browser Error"),
+        (
+            SyncResult(
+                success=False, status=SyncStatus.FAILED, message="Transient Error"
+            ),
+            "Transient Error",
         ),
-    ):
-        await service.run_sync_background(
-            job_id,
-            "http://fiorilli",
-            "user1",
-            "pass1",
-            "http://ahgora",
-            "user2",
-            "company",
-            "pass2",
-        )
-
-    # Should have called increment_job_retry, not update_job_status(FAILED)
-    repo.increment_job_retry.assert_called_once()
-    # Check that failed status was NOT finalized (only internal result status was FAILED)
-    # The actual DB update for FAILED is only called if success=True/False in run_sync_background
-    # wait, if result.success is False, it calls _handle_job_retry
-
-    status_calls = [call.args[1] for call in repo.update_job_status.call_args_list]
-    assert SyncStatus.FAILED not in status_calls
-    assert SyncStatus.RUNNING in status_calls
-
-
-@pytest.mark.asyncio
-async def test_run_sync_background_credentials_not_set_fails_permanently():
+    ],
+)
+async def test_run_sync_background_failure_marks_job_failed(outcome, message):
+    """There is no automatic retry: a failed sync ends as failed, with the reason."""
     repo = MagicMock()
     job_id = uuid4()
-    # Fresh job, retry_count=0
-    job = SyncJob(id=job_id, retry_count=0)
+    job = SyncJob(id=job_id)
     repo.get_job = AsyncMock(return_value=job)
     repo.update_job_status = AsyncMock()
-    repo.increment_job_retry = AsyncMock()
     repo.add_log = AsyncMock()
 
     service = SyncService(repo=repo)
 
+    side_effect = {"side_effect": outcome} if isinstance(outcome, Exception) else {}
+    return_value = {} if side_effect else {"return_value": outcome}
     with patch.object(
         service,
         "_execute_sync_logic",
         new_callable=AsyncMock,
-        return_value=SyncResult(
-            success=False,
-            status=SyncStatus.FAILED,
-            message="Credenciais do Ahgora não configuradas (usuário, senha e empresa)",
-        ),
+        **side_effect,
+        **return_value,
     ):
         await service.run_sync_background(
             job_id,
@@ -163,13 +98,9 @@ async def test_run_sync_background_credentials_not_set_fails_permanently():
             "pass2",
         )
 
-    # Should have called update_job_status with FAILED, not increment_job_retry
-    repo.increment_job_retry.assert_not_called()
-    repo.update_job_status.assert_any_call(
-        job_id,
-        SyncStatus.FAILED,
-        "Credenciais do Ahgora não configuradas (usuário, senha e empresa)",
-    )
+    repo.update_job_status.assert_any_call(job_id, SyncStatus.FAILED, message)
+    logged = [call.args[2] for call in repo.add_log.call_args_list]
+    assert f"Sincronização falhou: {message}" in logged
 
 
 @patch("app.services.sync_service.Path.exists", return_value=True)

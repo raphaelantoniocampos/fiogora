@@ -24,8 +24,6 @@ from app.domain.enums import AutomationTaskStatus
 from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
 from app.services.credential_crypto import (
     decrypt_credentials_dict,
-    store_credentials_in_metadata,
-    extract_credentials_from_metadata,
 )
 from app.services.sync_service import SyncService
 from app.services.task_execution_service import TaskExecutionService
@@ -139,8 +137,6 @@ async def run_sync_job(
     job = await service.create_job(triggered_by="api")
     job.user_id = user.id
 
-    # Store credentials in job metadata for retry purposes (encrypted) — must be before save_job
-    store_credentials_in_metadata(job.metadata_info, fiorilli_password, ahgora_password)
     await service.repo.save_job(job)
 
     # Run the sync task in the background
@@ -329,18 +325,6 @@ async def execute_all_job_tasks(
     ahgora_password = credentials_dict.get("ahgora_password")
     fiorilli_password = credentials_dict.get("fiorilli_password")
 
-    # If passwords are not configured in user, fallback to job metadata (if any)
-    if not fiorilli_password or not ahgora_password:
-        job = await repo.get_job(job_id)
-        if job and job.metadata_info:
-            creds_from_meta = extract_credentials_from_metadata(job.metadata_info)
-            if creds_from_meta:
-                meta_fiorilli_pwd, meta_ahgora_pwd = creds_from_meta
-                if not fiorilli_password:
-                    fiorilli_password = meta_fiorilli_pwd
-                if not ahgora_password:
-                    ahgora_password = meta_ahgora_pwd
-
     # Execute all tasks in background
     background_tasks.add_task(
         _run_all_tasks_standalone,
@@ -486,6 +470,95 @@ async def cancel_all_job_tasks(
 ):
     await service.cancel_all_for_job(job_id)
     return {"message": f"All tasks cancelled for job {job_id}"}
+
+
+class TaskSelection(BaseModel):
+    task_ids: list[UUID]
+
+
+async def _automation_credentials(request: Request, repo: SqlAlchemyRepo) -> dict:
+    """Credentials of the logged-in user, as keyword arguments for the execution service."""
+    user = await repo.get_user_by_username(request.state.username)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    credentials = await repo.get_user_credentials(user.id)
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="User credentials not found"
+        )
+    credentials = decrypt_credentials_dict(
+        credentials_dict=credentials, user_id=user.id
+    )
+    if not credentials.get("fiorilli_user"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fiorilli username missing for user",
+        )
+    if not credentials.get("ahgora_user"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ahgora username missing for user",
+        )
+    return {
+        "fiorilli_url": credentials.get("fiorilli_url") or settings.FIORILLI_URL,
+        "fiorilli_user": credentials["fiorilli_user"],
+        "fiorilli_password": credentials.get("fiorilli_password"),
+        "ahgora_url": credentials.get("ahgora_url") or settings.AHGORA_URL,
+        "ahgora_user": credentials["ahgora_user"],
+        "ahgora_company": credentials.get("ahgora_company"),
+        "ahgora_password": credentials.get("ahgora_password"),
+    }
+
+
+async def _run_selected_standalone(
+    task_ids: list[UUID], credentials: dict, username: Optional[str] = None
+):
+    from app.core.database import async_session_factory
+    from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
+
+    with log_context(username=username):
+        async with async_session_factory() as session:
+            service = TaskExecutionService(repo=SqlAlchemyRepo(session))
+            await service.execute_selected(task_ids, **credentials)
+
+
+# Declared before /tasks/{task_id}/..., which would otherwise read "selected" as a task id
+@router.post(
+    "/tasks/selected/execute",
+    summary="Execute Selected Automation Tasks",
+    description="Executes the given tasks one by one in the background. The selection is explicit, so cancelled tasks are executed too.",
+    tags=["Automation Tasks"],
+)
+async def execute_selected_tasks(
+    request: Request,
+    selection: TaskSelection,
+    background_tasks: BackgroundTasks,
+    exec_service: TaskExecutionService = Depends(get_execution_service),
+):
+    credentials = await _automation_credentials(request, exec_service.repo)
+    background_tasks.add_task(
+        _run_selected_standalone,
+        selection.task_ids,
+        credentials,
+        request.state.username,
+    )
+    return {"message": f"Execução de {len(selection.task_ids)} tarefa(s) iniciada"}
+
+
+@router.post(
+    "/tasks/selected/cancel",
+    summary="Cancel Selected Automation Tasks",
+    description="Cancels the given pending, running or failed tasks.",
+    tags=["Automation Tasks"],
+)
+async def cancel_selected_tasks(
+    selection: TaskSelection,
+    service: TaskExecutionService = Depends(get_execution_service),
+):
+    cancelled = await service.cancel_selected(selection.task_ids)
+    return {"message": f"{cancelled} tarefa(s) cancelada(s)"}
 
 
 async def _run_task_standalone(

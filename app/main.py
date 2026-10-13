@@ -8,7 +8,6 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.endpoints import router as api_router
 from app.core.logging import log_context, setup_logging
-from app.core.scheduler import scheduler
 from app.core.settings import settings
 from app.infrastructure.web.routes import router as web_router
 
@@ -30,11 +29,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error cleaning up stuck executions on startup: {e}")
 
-    # Startup: Start the retry scheduler
-    await scheduler.start()
     yield
-    # Shutdown: Stop the retry scheduler
-    await scheduler.stop()
 
 
 app = FastAPI(

@@ -244,6 +244,79 @@ function filterList(input, selector) {
     if (counter) counter.innerText = query ? `${shown} de ${items.length}` : `${items.length}`;
     const empty = scope.querySelector('[data-filter-empty]');
     if (empty) empty.classList.toggle('hidden', shown > 0);
+    if (scope.querySelector('[data-select-all]')) updateTaskSelection(input);
+}
+
+// --- Task multi-select (task_details_inline_partial.html) ---
+
+function selectableTaskChecks(scope) {
+    return Array.from(scope.querySelectorAll('[data-task-check]:not(:disabled)'));
+}
+
+// Refresh the selection bar and the "select all" box of the list the element belongs to
+function updateTaskSelection(element) {
+    const scope = element.closest('[data-filter-scope]');
+    const checks = selectableTaskChecks(scope);
+    const selected = checks.filter(check => check.checked).length;
+
+    scope.querySelector('[data-selection-bar]').classList.toggle('hidden', selected === 0);
+    scope.querySelector('[data-selection-count]').innerText =
+        `${selected} ${selected === 1 ? 'selecionada' : 'selecionadas'}`;
+
+    // "Select all" follows what the search is showing
+    const visible = checks.filter(check => !check.closest('[data-task]').classList.contains('hidden'));
+    const selectAll = scope.querySelector('[data-select-all]');
+    selectAll.checked = visible.length > 0 && visible.every(check => check.checked);
+    selectAll.indeterminate = !selectAll.checked && selected > 0;
+}
+
+function toggleAllTasks(selectAll) {
+    const scope = selectAll.closest('[data-filter-scope]');
+    selectableTaskChecks(scope).forEach(check => {
+        if (!check.closest('[data-task]').classList.contains('hidden')) check.checked = selectAll.checked;
+    });
+    updateTaskSelection(selectAll);
+}
+
+function clearTaskSelection(element) {
+    const scope = element.closest('[data-filter-scope]');
+    selectableTaskChecks(scope).forEach(check => { check.checked = false; });
+    updateTaskSelection(element);
+}
+
+// action: 'execute' or 'cancel'
+async function runOnSelectedTasks(btn, action) {
+    const scope = btn.closest('[data-filter-scope]');
+    const taskIds = selectableTaskChecks(scope).filter(check => check.checked).map(check => check.value);
+    if (!taskIds.length) return;
+    const count = `${taskIds.length} ${taskIds.length === 1 ? 'tarefa' : 'tarefas'}`;
+    if (action === 'execute' && !confirm(`Executar ${count} no Ahgora?`)) return;
+
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    try {
+        const response = await fetch(`/api/sync/tasks/selected/${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_ids: taskIds }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Falha ao processar as tarefas selecionadas");
+        }
+
+        if (typeof htmx !== 'undefined') {
+            htmx.trigger(document.body, 'refresh');
+        } else {
+            window.location.reload();
+        }
+    } catch (error) {
+        alert(error.message || "Erro ao processar as tarefas selecionadas.");
+        console.error(error);
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
 }
 
 window.startSync = startSync;
@@ -252,3 +325,7 @@ window.executeTask = executeTask;
 window.cancelBatch = cancelBatch;
 window.cancelTask = cancelTask;
 window.filterList = filterList;
+window.updateTaskSelection = updateTaskSelection;
+window.toggleAllTasks = toggleAllTasks;
+window.clearTaskSelection = clearTaskSelection;
+window.runOnSelectedTasks = runOnSelectedTasks;

@@ -26,8 +26,6 @@ class SyncJobModel(Base):
     finished_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     metadata_info: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
-    retry_count: Mapped[int] = mapped_column(default=0)
-    next_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     logs: Mapped[list["SyncLogModel"]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
@@ -72,7 +70,6 @@ class AutomationTaskModel(Base):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    retry_count: Mapped[int] = mapped_column(default=0)
 
     job: Mapped["SyncJobModel"] = relationship(back_populates="automation_tasks")
     logs: Mapped[list["SyncLogModel"]] = relationship(

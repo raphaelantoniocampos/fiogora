@@ -62,8 +62,6 @@ class SqlAlchemyRepo:
             finished_at=db.finished_at,
             error_message=db.error_message,
             metadata_info=db.metadata_info,
-            retry_count=db.retry_count,
-            next_retry_at=db.next_retry_at,
         )
 
     @staticmethod
@@ -115,8 +113,6 @@ class SqlAlchemyRepo:
                 finished_at=job.finished_at,
                 error_message=job.error_message,
                 metadata_info=job.metadata_info,
-                retry_count=job.retry_count,
-                next_retry_at=job.next_retry_at,
             )
             self.session.add(db_job)
         else:
@@ -127,8 +123,6 @@ class SqlAlchemyRepo:
             db_job.finished_at = job.finished_at  # type: ignore
             db_job.error_message = job.error_message  # type: ignore
             db_job.metadata_info = job.metadata_info
-            db_job.retry_count = job.retry_count
-            db_job.next_retry_at = job.next_retry_at  # type: ignore
 
         await self.session.commit()
 
@@ -178,8 +172,6 @@ class SqlAlchemyRepo:
             if status == SyncStatus.RUNNING:
                 if not db_job.started_at:
                     db_job.started_at = datetime.now()
-                # Clear next_retry_at when starting
-                db_job.next_retry_at = None  # type: ignore
             elif status in [
                 SyncStatus.SUCCESS,
                 SyncStatus.FAILED,
@@ -191,23 +183,6 @@ class SqlAlchemyRepo:
                 db_job.error_message = message
 
             await self.session.commit()
-
-    async def increment_job_retry(self, job_id: UUID, next_retry_at: datetime):
-        db_job = await self.session.get(SyncJobModel, job_id)
-        if db_job:
-            db_job.retry_count += 1
-            db_job.next_retry_at = next_retry_at
-            db_job.status = SyncStatus.RETRYING
-            await self.session.commit()
-
-    async def get_jobs_ready_for_retry(self) -> List[SyncJob]:
-        now = datetime.now()
-        result = await self.session.execute(
-            select(SyncJobModel)
-            .where(SyncJobModel.status == SyncStatus.RETRYING)
-            .where(SyncJobModel.next_retry_at <= now)
-        )
-        return [self._to_job(db) for db in result.scalars().all()]
 
     async def add_log(
         self, job_id: UUID, level: str, message: str, task_id: Optional[UUID] = None
@@ -252,7 +227,6 @@ class SqlAlchemyRepo:
                 started_at=task.started_at,
                 finished_at=task.finished_at,
                 error_message=task.error_message,
-                retry_count=task.retry_count,
             )
             self.session.add(db_task)
         else:
@@ -261,7 +235,6 @@ class SqlAlchemyRepo:
             db_task.started_at = task.started_at  # type: ignore
             db_task.finished_at = task.finished_at  # type: ignore
             db_task.error_message = task.error_message  # type: ignore
-            db_task.retry_count = task.retry_count
 
         await self.session.commit()
 
@@ -280,7 +253,6 @@ class SqlAlchemyRepo:
             started_at=db_task.started_at,
             finished_at=db_task.finished_at,
             error_message=db_task.error_message,
-            retry_count=db_task.retry_count,
         )
 
     async def update_task_status(
@@ -403,7 +375,6 @@ class SqlAlchemyRepo:
                 started_at=task.started_at,
                 finished_at=task.finished_at,
                 error_message=task.error_message,
-                retry_count=task.retry_count,
             )
             for task in tasks
         ]
@@ -428,7 +399,6 @@ class SqlAlchemyRepo:
                 started_at=db.started_at,
                 finished_at=db.finished_at,
                 error_message=db.error_message,
-                retry_count=db.retry_count,
             )
             for db in db_tasks
         ]
@@ -455,7 +425,6 @@ class SqlAlchemyRepo:
                 started_at=db.started_at,
                 finished_at=db.finished_at,
                 error_message=db.error_message,
-                retry_count=db.retry_count,
             )
             for db in db_tasks
         ]
