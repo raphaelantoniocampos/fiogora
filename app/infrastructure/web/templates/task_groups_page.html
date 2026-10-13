@@ -129,7 +129,7 @@
                                 <button
                                     onclick="event.stopPropagation(); window.executeBatch('{{ job_id }}', '{{ group.type.value if group.type.value is defined else group.type }}', this)"
                                     class="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 pl-2 pr-3 py-1.5 mr-1 rounded-full transition-all flex items-center gap-1.5"
-                                    title="Executar as tarefas pendentes e com falha deste tipo (as canceladas ficam de fora)">
+                                    title="Executar as tarefas pendentes e com falha deste tipo">
                                     <svg class="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z">

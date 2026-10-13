@@ -42,7 +42,17 @@ def format_duration(seconds: float) -> str:
     return f"{days}d {hours}h" if hours else f"{days}d"
 
 
+def _static_version() -> str:
+    """Changes whenever a static file does. Static files are served without cache headers, so
+    browsers keep a script for hours after a deploy unless its URL changes."""
+    static_dir = settings.BASE_DIR / "app" / "static"
+    return str(
+        int(max(p.stat().st_mtime for p in static_dir.rglob("*") if p.is_file()))
+    )
+
+
 templates.env.filters["duration"] = format_duration
+templates.env.globals["static_version"] = _static_version()
 templates.env.globals.update(
     task_status=task_view.task_status,
     task_name=task_view.task_name,

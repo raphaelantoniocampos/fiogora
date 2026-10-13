@@ -507,3 +507,14 @@ def test_get_task_log_partial(mock_service_class, mock_decode, client):
     assert "Executed step 1" in response.text
 
     app.dependency_overrides.pop(api_get_service, None)
+
+
+def test_script_urls_carry_a_version(client):
+    """Without it, browsers keep running the previous storage.js for hours after a deploy."""
+    import re
+
+    from app.infrastructure.web.routes import _static_version
+
+    html = client.get("/login").text
+    assert re.search(rf'/static/js/storage\.js\?v={_static_version()}"', html)
+    assert _static_version().isdigit()

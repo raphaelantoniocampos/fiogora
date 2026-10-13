@@ -259,9 +259,18 @@ function updateTaskSelection(element) {
     const checks = selectableTaskChecks(scope);
     const selected = checks.filter(check => check.checked).length;
 
-    scope.querySelector('[data-selection-bar]').classList.toggle('hidden', selected === 0);
-    scope.querySelector('[data-selection-count]').innerText =
-        `${selected} ${selected === 1 ? 'selecionada' : 'selecionadas'}`;
+    const bar = scope.querySelector('[data-selection-bar]');
+    bar.classList.toggle('bg-indigo-50', selected > 0);
+    bar.classList.toggle('bg-white', selected === 0);
+    const count = bar.querySelector('[data-selection-count]');
+    count.innerText = selected === 0
+        ? 'Marque as tarefas para agir em várias de uma vez'
+        : `${selected} ${selected === 1 ? 'selecionada' : 'selecionadas'}`;
+    count.classList.toggle('font-medium', selected > 0);
+    count.classList.toggle('text-indigo-900', selected > 0);
+    count.classList.toggle('text-slate-500', selected === 0);
+    bar.querySelectorAll('[data-selection-action]').forEach(button => { button.disabled = selected === 0; });
+    bar.querySelector('[data-selection-clear]').classList.toggle('hidden', selected === 0);
 
     // "Select all" follows what the search is showing
     const visible = checks.filter(check => !check.closest('[data-task]').classList.contains('hidden'));

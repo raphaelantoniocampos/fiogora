@@ -17,20 +17,20 @@
         {% endif %}
     </div>
 
-    <!-- Actions on the selected tasks (shown once something is selected) -->
+    <!-- Actions on the selected tasks: always visible, enabled once something is selected -->
     <div data-selection-bar
-        class="hidden flex flex-wrap items-center gap-2 px-4 py-2 border-b border-indigo-100 bg-indigo-50/60 text-sm">
-        <span data-selection-count class="font-medium text-indigo-900 mr-1"></span>
-        <button type="button" onclick="runOnSelectedTasks(this, 'execute')"
-            title="Executa as selecionadas, inclusive as canceladas"
-            class="text-emerald-700 bg-white ring-1 ring-inset ring-emerald-200 hover:bg-emerald-50 px-3 py-1 rounded-full text-xs font-semibold transition-all">Executar
+        class="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-slate-100 bg-white text-sm transition-colors">
+        <span data-selection-count class="text-slate-500 mr-1">Marque as tarefas para agir em várias de uma vez</span>
+        <button type="button" data-selection-action disabled onclick="runOnSelectedTasks(this, 'execute')"
+            title="Executa as tarefas selecionadas, inclusive as canceladas"
+            class="text-emerald-700 bg-white ring-1 ring-inset ring-emerald-200 enabled:hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1 rounded-full text-xs font-semibold transition-all">Executar
             selecionadas</button>
-        <button type="button" onclick="runOnSelectedTasks(this, 'cancel')"
-            title="Cancela as selecionadas: elas ficam de fora da execução em lote"
-            class="text-rose-700 bg-white ring-1 ring-inset ring-rose-200 hover:bg-rose-50 px-3 py-1 rounded-full text-xs font-semibold transition-all">Cancelar
+        <button type="button" data-selection-action disabled onclick="runOnSelectedTasks(this, 'cancel')"
+            title="Cancela as tarefas selecionadas"
+            class="text-rose-700 bg-white ring-1 ring-inset ring-rose-200 enabled:hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1 rounded-full text-xs font-semibold transition-all">Cancelar
             selecionadas</button>
-        <button type="button" onclick="clearTaskSelection(this)"
-            class="ml-auto text-xs text-slate-500 hover:text-slate-700 font-medium">Limpar seleção</button>
+        <button type="button" data-selection-clear onclick="clearTaskSelection(this)"
+            class="hidden ml-auto text-xs text-slate-500 hover:text-slate-700 font-medium">Limpar seleção</button>
     </div>
 
     <ul class="divide-y divide-slate-100 max-h-[520px] overflow-y-auto">
