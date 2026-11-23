@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import logging
 import re
@@ -43,6 +44,26 @@ logger = logging.getLogger(__name__)
 # Errors that trying again cannot fix: wrong password ("Usuário ou senha ... inválido") or
 # missing credentials ("Credenciais do ... não configuradas")
 AUTH_ERROR_MARKERS = ("inválido", "invalido", "credenciais do", "credenciais não")
+
+
+def parse_ahgora_locations(val) -> list[str]:
+    """Locations of an Ahgora employee as saved in the database: a list literal
+    "['A', 'B']" or "A; B". Upper case and sorted."""
+    if not isinstance(val, str) or pd.isna(val):
+        return []
+    val = val.strip()
+    if val.startswith("[") and val.endswith("]"):
+        try:
+            locs = [x.strip().upper() for x in ast.literal_eval(val)]
+        except Exception:
+            locs = [val.upper()]
+    elif val:
+        locs = [x.strip().upper() for x in val.split(";")]
+    else:
+        locs = []
+
+    locs = [x for x in locs if x]
+    return sorted(locs)
 
 
 def _is_auth_error(message: Optional[str]) -> bool:
@@ -1074,7 +1095,6 @@ class SyncService:
         # Check location
         from app.core.settings import settings
         import csv
-        import ast
 
         csv_path = settings.DATA_DIR / "mappings" / "department_to_location.csv"
         dept_to_loc = {}
@@ -1107,32 +1127,13 @@ class SyncService:
                     f"Could not read department_to_location.csv in sync_service: {e}"
                 )
 
-        def extract_ahgora_locations(val):
-            if not isinstance(val, str) or pd.isna(val):
-                return []
-            val = val.strip()
-            if val.startswith("[") and val.endswith("]"):
-                try:
-                    locs = [x.strip().upper() for x in ast.literal_eval(val)]
-                except Exception:
-                    locs = [val.upper()]
-            elif val:
-                locs = [x.strip().upper() for x in val.split(";")]
-            else:
-                locs = []
-
-            locs = [x for x in locs if x]
-            return sorted(locs)
-
         if "location" in merged and dept_to_loc and settings.UPDATE_LOCATIONS:
             merged["location_expected"] = merged["department_expected"].apply(
                 lambda x: dept_to_loc.get(
                     str(x).strip().upper() if pd.notna(x) else "", []
                 )
             )
-            merged["location_actual"] = merged["location"].apply(
-                extract_ahgora_locations
-            )
+            merged["location_actual"] = merged["location"].apply(parse_ahgora_locations)
             location_condition = merged.apply(
                 lambda row: (
                     len(row["location_expected"]) > 0

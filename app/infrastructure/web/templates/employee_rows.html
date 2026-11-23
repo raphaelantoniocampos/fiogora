@@ -1,0 +1,27 @@
+{# Items of the employee list, then the item that loads the next page when it scrolls into view #}
+{% macro highlighted(match, key) -%}
+{% for text, hit in match.segments(key) %}{% if hit %}<mark class="bg-amber-200/70 text-inherit rounded-sm">{{ text }}</mark>{% else %}{{ text }}{% endif %}{% endfor %}
+{%- endmacro %}
+{% for match in matches %}
+{% set employee = match.employee %}
+<li data-employee class="px-4 py-3 md:px-6 hover:bg-slate-50/70 transition-colors{{ ' opacity-60' if employee.dismissed }}">
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span class="text-sm font-semibold text-slate-800">{{ highlighted(match, 'name') }}</span>
+        <span class="text-xs text-slate-400 tabular-nums" title="Matrícula">{{ highlighted(match, 'id') }}</span>
+        {% if employee.dismissed %}
+        <span
+            class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset bg-slate-100 text-slate-600 ring-slate-200">Desligado
+            em {{ highlighted(match, 'dismissal_date') }}</span>
+        {% endif %}
+    </div>
+    <div class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-500">
+        {% for key, label in employee_details if employee.value(key) %}
+        <span><span class="text-slate-400">{{ label }}:</span> {{ highlighted(match, key) }}</span>
+        {% endfor %}
+    </div>
+</li>
+{% endfor %}
+{% if next_url %}
+<li hx-get="{{ next_url }}" hx-trigger="intersect once" hx-swap="outerHTML"
+    class="px-6 py-4 text-center text-xs text-slate-400">Carregando mais funcionários…</li>
+{% endif %}
