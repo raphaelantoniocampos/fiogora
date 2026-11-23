@@ -3,7 +3,7 @@ from typing import List, Optional
 from uuid import UUID
 
 import pandas as pd
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_log_context
@@ -525,6 +525,15 @@ class SqlAlchemyRepo:
             for emp in employees
         ]
         return pd.DataFrame(data)
+
+    async def get_ahgora_employees_version(self) -> tuple[int, Optional[datetime]]:
+        """(count, latest last_synced_at) of the cached Ahgora employees. Changes whenever
+        an employee is saved: save_ahgora_employees_batch sets last_synced_at."""
+        result = await self.session.execute(
+            select(func.count(), func.max(AhgoraEmployeeModel.last_synced_at))
+        )
+        count, latest = result.one()
+        return count, latest
 
     async def get_ahgora_leaves_df(self) -> pd.DataFrame:
         """Returns the cached Ahgora leaves as a DataFrame"""

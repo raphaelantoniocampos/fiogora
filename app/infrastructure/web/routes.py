@@ -1,9 +1,10 @@
 from datetime import timedelta
 from typing import Any, Dict, Optional
+from urllib.parse import urlencode
 from uuid import UUID
 
 import dotenv
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,7 @@ from app.domain.entities import AutomationTask, SyncJob, SyncLog
 from app.domain.enums import SyncStatus
 from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
 from app.infrastructure.web import task_view
+from app.services import employee_directory
 from app.services.credential_crypto import decrypt_password, encrypt_password
 from app.services.sync_service import SyncService
 
@@ -261,6 +263,92 @@ async def dashboard(request: Request, service: SyncService = Depends(get_service
             "is_docker": settings.IS_DOCKER,
         },
     )
+
+
+EMPLOYEES_PAGE_SIZE = 100
+# Shown under the employee name, labeled as in the task details
+EMPLOYEE_DETAILS = [
+    (key, dict(task_view.EMPLOYEE_FIELDS)[key])
+    for key in (
+        "birth_date",
+        "position",
+        "department",
+        "location",
+        "scale",
+        "binding",
+        "cost_center",
+        "admission_date",
+    )
+]
+
+
+def _employees_query(q: str, dismissed: bool, offset: int = 0) -> str:
+    """Query string of the employees page, without the empty values."""
+    params = {
+        "q": q.strip(),
+        "dismissed": "on" if dismissed else "",
+        "offset": offset or "",
+    }
+    return urlencode({key: value for key, value in params.items() if value})
+
+
+async def _employees_context(
+    service: SyncService, q: str, dismissed: bool, offset: int
+) -> dict[str, Any]:
+    employees, fiorilli_updated_at = await employee_directory.load_employees(service)
+    matches = employee_directory.search(employees, q, include_dismissed=dismissed)
+    page = matches[offset : offset + EMPLOYEES_PAGE_SIZE]
+    end = offset + len(page)
+    dismissed_count = sum(employee.dismissed for employee in employees)
+    return {
+        "q": q.strip(),
+        "dismissed": dismissed,
+        "matches": page,
+        "total": len(matches),
+        "active_count": len(employees) - dismissed_count,
+        "dismissed_count": dismissed_count,
+        "next_url": f"/partials/employees?{_employees_query(q, dismissed, end)}"
+        if end < len(matches)
+        else None,
+        "fiorilli_updated_at": fiorilli_updated_at,
+        "employee_details": EMPLOYEE_DETAILS,
+    }
+
+
+@router.get("/employees", dependencies=[Depends(require_auth)])
+async def employees_page(
+    request: Request,
+    q: str = Query("", max_length=100),
+    dismissed: bool = False,
+    service: SyncService = Depends(get_service),
+):
+    context = await _employees_context(service, q, dismissed, offset=0)
+    return templates.TemplateResponse("employees.html", {"request": request, **context})
+
+
+@router.get("/partials/employees", dependencies=[Depends(require_auth)])
+async def employees_partial(
+    request: Request,
+    q: str = Query("", max_length=100),
+    dismissed: bool = False,
+    offset: int = Query(0, ge=0),
+    service: SyncService = Depends(get_service),
+):
+    """Search results of the employees page; with an offset, only the next items."""
+    context = await _employees_context(service, q, dismissed, offset)
+    if offset:
+        return templates.TemplateResponse(
+            "employee_rows.html", {"request": request, **context}
+        )
+    response = templates.TemplateResponse(
+        "employees_partial.html", {"request": request, **context}
+    )
+    # Keep the search in the address bar, so reloading the page keeps it
+    query = _employees_query(q, dismissed)
+    response.headers["HX-Replace-Url"] = (
+        f"/employees?{query}" if query else "/employees"
+    )
+    return response
 
 
 @router.get("/config", dependencies=[Depends(require_auth)])

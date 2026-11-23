@@ -1,0 +1,39 @@
+<!-- Search results of the employees page (employees.html) -->
+<div
+    class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 md:px-6 border-b border-slate-100 text-xs text-slate-500">
+    <span>
+        {% if q %}
+        <span class="font-semibold text-slate-700 tabular-nums">{{ total }}</span>
+        {{ 'resultado' if total == 1 else 'resultados' }}
+        {% else %}
+        <span class="font-semibold text-slate-700 tabular-nums">{{ active_count }}</span>
+        {{ 'ativo' if active_count == 1 else 'ativos' }}
+        {% if dismissed %}
+        · <span class="font-semibold text-slate-700 tabular-nums">{{ dismissed_count }}</span>
+        {{ 'desligado' if dismissed_count == 1 else 'desligados' }}
+        {% endif %}
+        {% endif %}
+    </span>
+    {% if fiorilli_updated_at %}
+    <span>Nascimento, vínculo e centro de custo do arquivo do Fiorilli de {{
+        fiorilli_updated_at.strftime('%d/%m/%Y %H:%M') }}</span>
+    {% else %}
+    <span class="text-amber-600">Arquivo do Fiorilli não encontrado: nascimento, vínculo e centro de custo aparecem
+        depois da próxima sincronização</span>
+    {% endif %}
+</div>
+<ul class="divide-y divide-slate-100">
+    {% include "employee_rows.html" %}
+    {% if not matches %}
+    <li class="px-6 py-12 text-center text-sm text-slate-400 italic">
+        {% if not active_count and not dismissed_count %}
+        Ainda não há funcionários salvos. Eles aparecem aqui depois da primeira sincronização.
+        {% else %}
+        Nenhum funcionário encontrado{% if q %} para “{{ q }}”{% endif %}.
+        {% if not dismissed and dismissed_count %}
+        <span class="block mt-1">Marque “Mostrar desligados” para procurar também entre os desligados.</span>
+        {% endif %}
+        {% endif %}
+    </li>
+    {% endif %}
+</ul>
