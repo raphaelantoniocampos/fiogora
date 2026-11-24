@@ -3,7 +3,7 @@
 {% for text, hit in match.segments(key) %}{% if hit %}<mark class="bg-amber-200/70 text-inherit rounded-sm">{{ text }}</mark>{% else %}{{ text }}{% endif %}{% endfor %}
 {%- endmacro %}
 {% for match in matches %}
-{% set employee = match.employee %}
+{% set employee = match.record %}
 <li data-employee class="px-4 py-3 md:px-6 hover:bg-slate-50/70 transition-colors{{ ' opacity-60' if employee.dismissed }}">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span class="text-sm font-semibold text-slate-800">{{ highlighted(match, 'name') }}</span>

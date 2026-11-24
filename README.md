@@ -16,6 +16,7 @@
 - **Docker-First**: Ambiente totalmente em contêineres para implantação consistente.
 - **Gerenciamento de Tarefas**: API REST para monitorar, listar e revisar logs detalhados de cada tarefa de sincronização.
 - **Consulta de Funcionários**: lista dos funcionários com busca aproximada por qualquer dado (nome, matrícula, nascimento, cargo, departamento, localização...), incluindo os desligados se desejado.
+- **Consulta de Afastamentos**: lista dos afastamentos salvos do Ahgora, em andamento e agendados (e os encerrados se desejado), com a mesma busca aproximada por nome, matrícula, tipo, código, datas, cargo ou departamento.
 - **Logs Detalhados**: Logs de execução granulares disponíveis via API REST.
 
 ---

@@ -1,0 +1,48 @@
+{# Items of the leave list, then the item that loads the next page when it scrolls into view #}
+{% macro highlighted(match, key) -%}
+{% for text, hit in match.segments(key) %}{% if hit %}<mark class="bg-amber-200/70 text-inherit rounded-sm">{{ text }}</mark>{% else %}{{ text }}{% endif %}{% endfor %}
+{%- endmacro %}
+{% for match in matches %}
+{% set leave = match.record %}
+{% set status = leave.status(today) %}
+<li data-leave class="px-4 py-3 md:px-6 hover:bg-slate-50/70 transition-colors{{ ' opacity-60' if status == statuses.ENDED }}">
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {% if leave.name %}
+        <span class="text-sm font-semibold text-slate-800">{{ highlighted(match, 'name') }}</span>
+        {% else %}
+        <span class="text-sm font-semibold text-slate-500 italic">Funcionário não encontrado</span>
+        {% endif %}
+        <span class="text-xs text-slate-400 tabular-nums" title="Matrícula">{{ highlighted(match, 'id') }}</span>
+        {% if status == statuses.CURRENT %}
+        <span
+            class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset bg-emerald-50 text-emerald-700 ring-emerald-200">Em
+            andamento</span>
+        {% elif status == statuses.UPCOMING %}
+        <span
+            class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset bg-indigo-50 text-indigo-700 ring-indigo-200">Agendado</span>
+        {% else %}
+        <span
+            class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset bg-slate-100 text-slate-600 ring-slate-200">Encerrado</span>
+        {% endif %}
+    </div>
+    <div class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm text-slate-700">
+        <span>{% if leave.cod_name %}{{ highlighted(match, 'cod_name') }}{% else %}Afastamento{% endif %}</span>
+        <span class="text-xs text-slate-400 tabular-nums" title="Código do afastamento">cód. {{ highlighted(match, 'cod') }}</span>
+    </div>
+    <div class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-500">
+        <span class="tabular-nums">
+            <span class="text-slate-400">Período:</span>
+            {{ highlighted(match, 'start_date') }}
+            {% if leave.end_date %} a {{ highlighted(match, 'end_date') }}{% else %} em diante{% endif %}
+            {% if leave.duration %}<span class="text-slate-400">({{ leave.duration }} {{ 'dia' if leave.duration == 1 else 'dias' }})</span>{% endif %}
+        </span>
+        {% for key, label in [('position', 'Cargo'), ('department', 'Departamento')] if leave.value(key) %}
+        <span><span class="text-slate-400">{{ label }}:</span> {{ highlighted(match, key) }}</span>
+        {% endfor %}
+    </div>
+</li>
+{% endfor %}
+{% if next_url %}
+<li hx-get="{{ next_url }}" hx-trigger="intersect once" hx-swap="outerHTML"
+    class="px-6 py-4 text-center text-xs text-slate-400">Carregando mais afastamentos…</li>
+{% endif %}

@@ -535,6 +535,15 @@ class SqlAlchemyRepo:
         count, latest = result.one()
         return count, latest
 
+    async def get_ahgora_leaves_version(self) -> tuple[int, Optional[datetime]]:
+        """(count, latest last_synced_at) of the cached Ahgora leaves. Changes whenever a
+        leave is saved: save_ahgora_leaves_batch adds rows."""
+        result = await self.session.execute(
+            select(func.count(), func.max(AhgoraLeaveModel.last_synced_at))
+        )
+        count, latest = result.one()
+        return count, latest
+
     async def get_ahgora_leaves_df(self) -> pd.DataFrame:
         """Returns the cached Ahgora leaves as a DataFrame"""
         result = await self.session.execute(select(AhgoraLeaveModel))
