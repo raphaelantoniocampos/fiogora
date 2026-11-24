@@ -68,6 +68,15 @@
             transform: translateY(-1px);
         }
 
+        .icon-btn {
+            background: var(--primary);
+            transition: all 0.2s;
+        }
+        .icon-btn:hover {
+            background-color: var(--primary-hover);
+            color: white;
+        }
+
         /* Tables that turn into stacked cards on phones (rows with .hidden stay hidden) */
         @media (max-width: 767px) {
             .stack-table, .stack-table tbody, .stack-table tr, .stack-table td {

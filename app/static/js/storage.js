@@ -57,10 +57,11 @@ async function encryptString(text, publicKey) {
 // Action functions
 async function startSync(event) {
     const btn = event.currentTarget;
-    const btnText = document.getElementById("syncBtnText");
+    // The button only holds the icon, so keep its markup (innerText would be empty)
+    const oldBtnHtml = btn.innerHTML;
 
     btn.disabled = true;
-    if (btnText) btnText.innerText = "Iniciando...";
+    btn.innerText = "Iniciando...";
 
     try {
         const response = await fetch('/api/sync/run', {
@@ -86,7 +87,7 @@ async function startSync(event) {
         }
     } finally {
         btn.disabled = false;
-        if (btnText) btnText.innerText = "Iniciar Sincronização";
+        btn.innerHTML = oldBtnHtml;
     }
 }
 
