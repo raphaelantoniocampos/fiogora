@@ -14,10 +14,10 @@ from app.services import employee_directory
 from app.services.employee_directory import (
     Employee,
     build_employees,
-    fold,
     load_employees,
     search,
 )
+from app.services.fuzzy_search import fold
 from app.services.sync_service import parse_ahgora_locations
 
 
@@ -32,7 +32,7 @@ def empty_caches():
 
 def _search(query, *employees, include_dismissed=False):
     matches = search(list(employees), query, include_dismissed=include_dismissed)
-    return [match.employee.name for match in matches]
+    return [match.record.name for match in matches]
 
 
 # --- search ----------------------------------------------------------------------------

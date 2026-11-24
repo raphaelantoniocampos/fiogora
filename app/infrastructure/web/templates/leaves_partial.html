@@ -1,0 +1,35 @@
+<!-- Search results of the leaves page (leaves.html) -->
+<div
+    class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 md:px-6 border-b border-slate-100 text-xs text-slate-500">
+    <span>
+        {% if q %}
+        <span class="font-semibold text-slate-700 tabular-nums">{{ total }}</span>
+        {{ 'resultado' if total == 1 else 'resultados' }}
+        {% else %}
+        <span class="font-semibold text-slate-700 tabular-nums">{{ current_count }}</span>
+        em andamento
+        · <span class="font-semibold text-slate-700 tabular-nums">{{ upcoming_count }}</span>
+        {{ 'agendado' if upcoming_count == 1 else 'agendados' }}
+        {% if ended %}
+        · <span class="font-semibold text-slate-700 tabular-nums">{{ ended_count }}</span>
+        {{ 'encerrado' if ended_count == 1 else 'encerrados' }}
+        {% endif %}
+        {% endif %}
+    </span>
+    <span>Situação em {{ today.strftime('%d/%m/%Y') }}</span>
+</div>
+<ul class="divide-y divide-slate-100">
+    {% include "leave_rows.html" %}
+    {% if not matches %}
+    <li class="px-6 py-12 text-center text-sm text-slate-400 italic">
+        {% if not current_count and not upcoming_count and not ended_count %}
+        Ainda não há afastamentos salvos. Eles aparecem aqui depois que uma sincronização os importa.
+        {% else %}
+        Nenhum afastamento encontrado{% if q %} para “{{ q }}”{% endif %}.
+        {% if not ended and ended_count %}
+        <span class="block mt-1">Marque “Mostrar encerrados” para procurar também entre os encerrados.</span>
+        {% endif %}
+        {% endif %}
+    </li>
+    {% endif %}
+</ul>

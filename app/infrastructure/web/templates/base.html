@@ -68,13 +68,17 @@
             transform: translateY(-1px);
         }
 
-        .icon-btn {
-            background: var(--primary);
-            transition: all 0.2s;
+        .icon-btn,
+        .icon-btn > svg {
+            transition: background-color 0.2s, color 0.2s;
         }
+
         .icon-btn:hover {
-            background-color: var(--primary-hover);
-            color: white;
+            background-color: currentColor;
+        }
+
+        .icon-btn:hover > svg {
+            color: color-mix(in srgb, currentColor 8%, white);
         }
 
         /* Tables that turn into stacked cards on phones (rows with .hidden stay hidden) */
@@ -158,14 +162,17 @@
                 <li><a href="/employees"
                         class="block py-2 md:py-0 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">Funcionários</a>
                 </li>
+                <li><a href="/leaves"
+                        class="block py-2 md:py-0 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">Afastamentos</a>
+                </li>
                 {% endif %}
-                <li><a href="/docs"
-                        class="block py-2 md:py-0 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
-                        target="_blank">Documentação</a></li>
                 {% if request.state.username %}
                 <li><a href="/config"
                         class="block py-2 md:py-0 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">Configurações</a>
                 </li>
+                <li><a href="/docs"
+                        class="block py-2 md:py-0 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors"
+                        target="_blank">Documentação</a></li>
                 <li><span class="block py-2 md:py-0 text-sm font-medium text-indigo-600 md:ml-2">
                         {{ request.state.username }}
                     </span>

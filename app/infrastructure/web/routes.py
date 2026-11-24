@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 from uuid import UUID
@@ -21,7 +21,7 @@ from app.domain.entities import AutomationTask, SyncJob, SyncLog
 from app.domain.enums import SyncStatus
 from app.infrastructure.db.sqlalchemy_repo import SqlAlchemyRepo
 from app.infrastructure.web import task_view
-from app.services import employee_directory
+from app.services import employee_directory, leave_directory
 from app.services.credential_crypto import decrypt_password, encrypt_password
 from app.services.sync_service import SyncService
 
@@ -348,6 +348,80 @@ async def employees_partial(
     response.headers["HX-Replace-Url"] = (
         f"/employees?{query}" if query else "/employees"
     )
+    return response
+
+
+LEAVES_PAGE_SIZE = 100
+
+
+def _leaves_query(q: str, ended: bool, offset: int = 0) -> str:
+    """Query string of the leaves page, without the empty values."""
+    params = {
+        "q": q.strip(),
+        "ended": "on" if ended else "",
+        "offset": offset or "",
+    }
+    return urlencode({key: value for key, value in params.items() if value})
+
+
+async def _leaves_context(
+    service: SyncService, q: str, ended: bool, offset: int
+) -> dict[str, Any]:
+    leaves = await leave_directory.load_leaves(service)
+    today = date.today()
+    matches = leave_directory.search(leaves, q, today, include_ended=ended)
+    page = matches[offset : offset + LEAVES_PAGE_SIZE]
+    end = offset + len(page)
+    counts = {status: 0 for status in leave_directory.LeaveStatus}
+    for leave in leaves:
+        counts[leave.status(today)] += 1
+    return {
+        "q": q.strip(),
+        "ended": ended,
+        "today": today,
+        "statuses": leave_directory.LeaveStatus,
+        "matches": page,
+        "total": len(matches),
+        "current_count": counts[leave_directory.LeaveStatus.CURRENT],
+        "upcoming_count": counts[leave_directory.LeaveStatus.UPCOMING],
+        "ended_count": counts[leave_directory.LeaveStatus.ENDED],
+        "next_url": f"/partials/leaves?{_leaves_query(q, ended, end)}"
+        if end < len(matches)
+        else None,
+    }
+
+
+@router.get("/leaves", dependencies=[Depends(require_auth)])
+async def leaves_page(
+    request: Request,
+    q: str = Query("", max_length=100),
+    ended: bool = False,
+    service: SyncService = Depends(get_service),
+):
+    context = await _leaves_context(service, q, ended, offset=0)
+    return templates.TemplateResponse("leaves.html", {"request": request, **context})
+
+
+@router.get("/partials/leaves", dependencies=[Depends(require_auth)])
+async def leaves_partial(
+    request: Request,
+    q: str = Query("", max_length=100),
+    ended: bool = False,
+    offset: int = Query(0, ge=0),
+    service: SyncService = Depends(get_service),
+):
+    """Search results of the leaves page; with an offset, only the next items."""
+    context = await _leaves_context(service, q, ended, offset)
+    if offset:
+        return templates.TemplateResponse(
+            "leave_rows.html", {"request": request, **context}
+        )
+    response = templates.TemplateResponse(
+        "leaves_partial.html", {"request": request, **context}
+    )
+    # Keep the search in the address bar, so reloading the page keeps it
+    query = _leaves_query(q, ended)
+    response.headers["HX-Replace-Url"] = f"/leaves?{query}" if query else "/leaves"
     return response
 
 

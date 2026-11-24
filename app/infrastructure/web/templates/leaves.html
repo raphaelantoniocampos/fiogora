@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}FioGora | Afastamentos{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <div class="mb-6">
+        <div class="flex space-x-2 text-sm text-slate-500 mb-2 font-medium">
+            <a href="/" class="hover:text-indigo-600 transition-colors">Dashboard</a>
+            <span>/</span>
+            <span class="text-slate-700">Afastamentos</span>
+        </div>
+        <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Afastamentos</h2>
+        <p class="text-slate-500 mt-1">Os afastamentos salvos do Ahgora. Procure por qualquer dado: nome, matrícula,
+            tipo ou código do afastamento, datas, cargo, departamento...</p>
+    </div>
+
+    <div class="card overflow-hidden">
+        <!-- Searches as you type; without JavaScript the form reloads the page -->
+        <form action="/leaves" method="get" role="search" hx-get="/partials/leaves"
+            hx-target="#leave-results" hx-trigger="input delay:200ms, submit" hx-sync="this:replace"
+            class="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 md:px-6 border-b border-slate-100 bg-slate-50/50">
+            <div class="relative flex-1">
+                <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <input type="search" name="q" value="{{ q }}" maxlength="100" autofocus autocomplete="off"
+                    placeholder="Nome, matrícula, tipo, código, início, fim..." aria-label="Buscar afastamento"
+                    class="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+            <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none whitespace-nowrap">
+                <input type="checkbox" name="ended" {{ 'checked' if ended }}
+                    class="h-4 w-4 accent-indigo-600 cursor-pointer">
+                Mostrar encerrados
+            </label>
+        </form>
+        <p class="px-4 pt-3 md:px-6 text-xs text-slate-400">
+            Termos em qualquer ordem, sem acento; pequenos erros de digitação são tolerados.
+            Datas de início ou fim como 05/03/2026, 5/3/26, 0503, 03/2026 ou 2026.
+        </p>
+        <div id="leave-results">
+            {% include "leaves_partial.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %}
