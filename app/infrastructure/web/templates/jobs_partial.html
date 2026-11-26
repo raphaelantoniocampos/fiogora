@@ -1,5 +1,13 @@
 {% for job in jobs %}
-<tr class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 md:table-row md:p-0 hover:bg-slate-50 transition-colors group">
+
+    {% set clickable = job.metadata_info.get('tasks_generated', 0) > 0 %}
+    <tr class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 md:table-row md:p-0 hover:bg-slate-50 transition-colors group {{ 'cursor-pointer' if clickable }}"
+        {% if clickable %}
+        data-href="/jobs/{{ job.id }}/tasks"
+        tabindex="0"
+        role="link"
+        aria-label="Ver tarefas da sincronização {{ job.id }}"
+    {% endif %}>
     <td class="order-3 w-full md:w-auto md:table-cell md:px-6 md:py-4 whitespace-nowrap">
         {% set started = job.started_at or job.created_at %}
         <div class="flex flex-row items-baseline gap-2 md:flex-col md:gap-0">

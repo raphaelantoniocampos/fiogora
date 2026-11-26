@@ -215,6 +215,32 @@
         document.body.addEventListener('htmx:afterSwap', (e) => {
             if (e.detail.target.id === 'modal-content') openModal();
         });
+
+      if (!window.__rowClickInit) {
+        window.__rowClickInit = true;
+
+        function goToRow(e) {
+          const row = e.target.closest('tr[data-href]');
+          if (!row) return;
+            console.log("no row")
+          if (e.target.closest('a, button, input, select, textarea, label')) return;
+          if (window.getSelection().toString()) return;
+
+          if (e.ctrlKey || e.metaKey || e.button === 1) {
+            window.open(row.dataset.href, '_blank');
+          } else {
+            window.location.href = row.dataset.href;
+          }
+        }
+
+        document.addEventListener('click', goToRow);
+        document.addEventListener('auxclick', function (e) {
+          if (e.button === 1) goToRow(e);
+        });
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && e.target.matches('tr[data-href]')) goToRow(e);
+        });
+      }
     </script>
 </body>
 

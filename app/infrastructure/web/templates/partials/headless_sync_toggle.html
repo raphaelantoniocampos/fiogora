@@ -1,5 +1,5 @@
 <div id="headless-sync-toggles" class="flex items-center justify-between gap-4">
-    <span class="text-sm text-slate-700">Nos downloads</span>
+    <span class="text-sm text-slate-700">Downloads</span>
     <button hx-post="/api/settings/toggle-headless" hx-vals='{"target": "sync"}' hx-target="#headless-sync-toggles"
         hx-swap="outerHTML" role="switch" aria-checked="{{ 'true' if headless_mode else 'false' }}" aria-label="Navegador oculto nos downloads"
         {% if is_docker %}disabled title="No servidor o navegador é sempre oculto" {% endif %}

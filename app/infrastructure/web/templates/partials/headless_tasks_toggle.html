@@ -1,5 +1,5 @@
 <div id="headless-tasks-toggles" class="flex items-center justify-between gap-4">
-    <span class="text-sm text-slate-700">Nas tarefas</span>
+    <span class="text-sm text-slate-700">Tarefas</span>
     <button hx-post="/api/settings/toggle-headless" hx-vals='{"target": "tasks"}' hx-target="#headless-tasks-toggles"
         hx-swap="outerHTML" role="switch" aria-checked="{{ 'true' if headless_mode_tasks else 'false' }}" aria-label="Navegador oculto nas tarefas"
         {% if is_docker %}disabled title="No servidor o navegador é sempre oculto" {% endif %}
